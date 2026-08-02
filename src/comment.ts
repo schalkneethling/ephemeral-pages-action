@@ -43,20 +43,27 @@ export async function createOrUpdateComment(
   body: string,
   marker: string,
 ): Promise<number> {
-  const authenticated = await octokit.rest.users.getAuthenticated();
-  const safeAuthors = new Set(["github-actions[bot]", authenticated.data.login]);
   const comments = await octokit.paginate(octokit.rest.issues.listComments, {
     owner: event.owner,
     repo: event.repo,
     issue_number: event.pullRequestNumber,
     per_page: 100,
   });
-  const existing = comments.find(
-    (comment) =>
-      typeof comment.body === "string" &&
-      comment.body.includes(marker) &&
-      comment.user?.login &&
-      safeAuthors.has(comment.user.login),
+  const markedComments = comments.filter(
+    (comment) => typeof comment.body === "string" && comment.body.includes(marker),
+  );
+  const safeAuthors = new Set(["github-actions[bot]"]);
+  if (markedComments.some((comment) => comment.user?.login !== "github-actions[bot]")) {
+    try {
+      const authenticated = await octokit.rest.users.getAuthenticated();
+      safeAuthors.add(authenticated.data.login);
+    } catch {
+      // GITHUB_TOKEN is an installation token and cannot call the authenticated-user endpoint.
+      // The bot identity remains safe, while unmatched authors will cause a new comment.
+    }
+  }
+  const existing = markedComments.find(
+    (comment) => comment.user?.login && safeAuthors.has(comment.user.login),
   );
 
   if (existing) {

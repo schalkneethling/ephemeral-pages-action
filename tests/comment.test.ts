@@ -44,6 +44,7 @@ describe("pull-request comments", () => {
       mock.listComments,
       expect.objectContaining({ per_page: 100 }),
     );
+    expect(mock.client.rest.users.getAuthenticated).not.toHaveBeenCalled();
   });
 
   it.each(["github-actions[bot]", "token-owner"])(
@@ -62,6 +63,17 @@ describe("pull-request comments", () => {
   it("does not edit a marked comment by an unsafe author", async () => {
     const marker = commentMarker("Accessibility report");
     const mock = octokit([{ id: 98, body: marker, user: { login: "attacker" } }]);
+    await createOrUpdateComment(mock.client, event, "new", marker);
+    expect(mock.updateComment).not.toHaveBeenCalled();
+    expect(mock.createComment).toHaveBeenCalledOnce();
+  });
+
+  it("creates a new comment when an installation token cannot resolve a non-bot author", async () => {
+    const marker = commentMarker("Accessibility report");
+    const mock = octokit([{ id: 98, body: marker, user: { login: "someone" } }]);
+    vi.mocked(mock.client.rest.users.getAuthenticated).mockRejectedValue(
+      new Error("integration token"),
+    );
     await createOrUpdateComment(mock.client, event, "new", marker);
     expect(mock.updateComment).not.toHaveBeenCalled();
     expect(mock.createComment).toHaveBeenCalledOnce();

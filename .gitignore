@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+coverage/
+
+# Calavera's local npm cache
+.calavera/cache/
+
+# Varlock
+# Varlock recommends committing non-local .env.* files.
+# Review broader existing ignore rules before opting into that convention.
+!.env.schema
+.env.local
+.env.*.local

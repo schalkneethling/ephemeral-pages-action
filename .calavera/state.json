@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "profile": "modern",
+  "integrations": [
+    "editorconfig",
+    "typescript",
+    "knip",
+    "html-validate",
+    "varlock",
+    "oxlint",
+    "oxlint-eslint",
+    "oxlint-typescript",
+    "oxlint-unicorn",
+    "oxlint-oxc",
+    "oxlint-import",
+    "oxlint-node",
+    "oxlint-promise",
+    "oxlint-vitest",
+    "oxlint-jsdoc",
+    "oxfmt",
+    "stylelint",
+    "stylelint-standard",
+    "stylelint-baseline"
+  ],
+  "files": [
+    ".editorconfig",
+    "oxlint.json",
+    ".stylelintrc.json",
+    ".htmlvalidate.json",
+    ".htmlvalidateignore",
+    "knip.json",
+    "tsconfig.json"
+  ],
+  "managedFiles": [
+    {
+      "path": ".editorconfig",
+      "hash": "3a15156"
+    },
+    {
+      "path": "oxlint.json",
+      "hash": "2df17ad"
+    },
+    {
+      "path": ".stylelintrc.json",
+      "hash": "2616d4d"
+    },
+    {
+      "path": ".htmlvalidate.json",
+      "hash": "7423705"
+    },
+    {
+      "path": ".htmlvalidateignore",
+      "hash": "a07c739"
+    },
+    {
+      "path": "knip.json",
+      "hash": "0f92de4"
+    },
+    {
+      "path": "tsconfig.json",
+      "hash": "1719dcc"
+    }
+  ],
+  "aiArtifacts": [
+    {
+      "type": "skill",
+      "name": "frontend-engineering",
+      "source": "skill-frontend-engineering",
+      "path": ".agents/skills/frontend-engineering",
+      "hash": "35fa243"
+    },
+    {
+      "type": "skill",
+      "name": "frontend-security",
+      "source": "skill-frontend-security",
+      "path": ".agents/skills/frontend-security",
+      "hash": "105ec5b"
+    },
+    {
+      "type": "skill",
+      "name": "frontend-testing",
+      "source": "skill-frontend-testing",
+      "path": ".agents/skills/frontend-testing",
+      "hash": "e8b3329"
+    },
+    {
+      "type": "skill",
+      "name": "npm-trusted-publishing-github-workflow",
+      "source": "skill-npm-trusted-publishing-github-workflow",
+      "path": ".agents/skills/npm-trusted-publishing-github-workflow",
+      "hash": "ede9a25"
+    },
+    {
+      "type": "agent",
+      "name": "technical-devils-advocate",
+      "source": "agent-technical-devils-advocate",
+      "target": "claude-code",
+      "path": ".agents/agents/claude-code/technical-devils-advocate.md",
+      "hash": "d1c2b8a"
+    }
+  ]
+}

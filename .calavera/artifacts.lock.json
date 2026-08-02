@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "artifacts": [
+    {
+      "id": "skill-frontend-engineering",
+      "type": "skill",
+      "package": "@schalkneethling/calavera-skill-frontend-engineering",
+      "version": "0.2.0",
+      "resolved": "https://registry.npmjs.org/@schalkneethling/calavera-skill-frontend-engineering/-/calavera-skill-frontend-engineering-0.2.0.tgz",
+      "integrity": "sha512-Nk/mzC6ZZhz9ZinbRwSgPLXgdBnIUwwDge63qE4d+2zDDCcl0sRik8qeFkPg/XLsv5FQrVFMzEm1dxnO9anM6A==",
+      "tag": "latest",
+      "manifestVersion": 1,
+      "destination": ".agents/skills/frontend-engineering",
+      "payloadHash": "d2ffd3f8be2f6f769720052a27ad2bca86fc557898beb38bb1c38be12b3b0c43"
+    },
+    {
+      "id": "skill-frontend-security",
+      "type": "skill",
+      "package": "@schalkneethling/calavera-skill-frontend-security",
+      "version": "0.2.0",
+      "resolved": "https://registry.npmjs.org/@schalkneethling/calavera-skill-frontend-security/-/calavera-skill-frontend-security-0.2.0.tgz",
+      "integrity": "sha512-26PfCw+gNpZtj9oRQ4ck02Nl3tQi2vdaDZ3drSV/mqc0cB1x3qB7Z/5tVCeEH9Eu91y6rr4u/9pc5DBK7209Yw==",
+      "tag": "latest",
+      "manifestVersion": 1,
+      "destination": ".agents/skills/frontend-security",
+      "payloadHash": "c5b4d98ffd1e5dcf58129f044476aa574bb08f2b641367fc1acd1038f3e46c93"
+    },
+    {
+      "id": "skill-frontend-testing",
+      "type": "skill",
+      "package": "@schalkneethling/calavera-skill-frontend-testing",
+      "version": "0.2.0",
+      "resolved": "https://registry.npmjs.org/@schalkneethling/calavera-skill-frontend-testing/-/calavera-skill-frontend-testing-0.2.0.tgz",
+      "integrity": "sha512-xQeU3z81Sda88BeUkPH94BuhIZpISoeXYVU3PKHYGGHmKN1LdZUmnrrP2oqrCPBU3Z4yiVuroWX7EBEPxm1bkw==",
+      "tag": "latest",
+      "manifestVersion": 1,
+      "destination": ".agents/skills/frontend-testing",
+      "payloadHash": "f4b43bba0f6acffbf4fa00b0ed1483af58507b90e998862a520bb62b12dc5e01"
+    },
+    {
+      "id": "skill-npm-trusted-publishing-github-workflow",
+      "type": "skill",
+      "package": "@schalkneethling/calavera-skill-npm-trusted-publishing-github-workflow",
+      "version": "0.2.0",
+      "resolved": "https://registry.npmjs.org/@schalkneethling/calavera-skill-npm-trusted-publishing-github-workflow/-/calavera-skill-npm-trusted-publishing-github-workflow-0.2.0.tgz",
+      "integrity": "sha512-t4OTmBqT8VfV6aWlodYqBPtBbfwCVKUZM66eQpnEapW7bgNLovGCmdW0XM+E5c0RZ3WFE7tF2EjfvIGUjIkEJQ==",
+      "tag": "latest",
+      "manifestVersion": 1,
+      "destination": ".agents/skills/npm-trusted-publishing-github-workflow",
+      "payloadHash": "beac5866fcd61e08715578a5d709d6d47c4c311e201b8e5a31b0916851e13fcc"
+    },
+    {
+      "id": "agent-technical-devils-advocate",
+      "type": "agent",
+      "package": "@schalkneethling/calavera-agent-technical-devils-advocate",
+      "version": "0.2.0",
+      "resolved": "https://registry.npmjs.org/@schalkneethling/calavera-agent-technical-devils-advocate/-/calavera-agent-technical-devils-advocate-0.2.0.tgz",
+      "integrity": "sha512-MH3K0d9IXos+ObGuRCxIgkCON+SikHNGacsaUF/emyG6Vqt2H//TwqEvpYXgXItpR/1JmKghnPghKA/xw0xZKw==",
+      "tag": "latest",
+      "manifestVersion": 1,
+      "target": "claude-code",
+      "destination": ".agents/agents/claude-code/technical-devils-advocate.md",
+      "payloadHash": "d1c2b8ad6b3b90fcff76c924f7bf7936ed6883acefabe143b3195c0079e8ccf9"
+    }
+  ]
+}

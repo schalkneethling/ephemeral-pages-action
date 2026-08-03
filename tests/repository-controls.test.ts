@@ -37,6 +37,16 @@ describe("repository control acceptance criteria", () => {
     expect(planRepositoryControlChanges(matchingState(), desired)).toEqual([]);
   });
 
+  it("ignores object property insertion order when checking drift", () => {
+    const current = matchingState();
+    current.workflowPermissions = {
+      canApprovePullRequestReviews: false,
+      defaultWorkflowPermissions: "read",
+    };
+
+    expect(planRepositoryControlChanges(current, desired)).toEqual([]);
+  });
+
   it("plans only controls that have drifted", () => {
     const current = matchingState();
     current.immutableReleases = false;

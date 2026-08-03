@@ -40,7 +40,7 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
       env: options.env ?? process.env,
       input: options.input,
       maxBuffer: DEFAULT_OUTPUT_LIMIT,
-      stdio: options.quiet ? ["pipe", "pipe", "pipe"] : ["pipe", "pipe", "pipe"],
+      stdio: options.quiet ? ["pipe", "pipe", "pipe"] : ["pipe", "pipe", "inherit"],
     }).trim();
   } catch (error) {
     const failure = error as { stderr?: string | Buffer; status?: number };

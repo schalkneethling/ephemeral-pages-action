@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
-import { GitHubApi } from "./lib/github.ts";
+import { GitHubApi, MAX_GITHUB_API_PAGES } from "./lib/github.ts";
 import { readBoundedJson, run } from "./lib/io.ts";
 import { assertReleaseSource, parseStableVersion, verifyReleaseEvidence } from "./lib/release.ts";
 import type { CheckEvidence, PullRequestEvidence } from "./lib/release.ts";
@@ -16,6 +16,7 @@ interface ControlsConfig {
 }
 
 interface CheckRunsResponse {
+  total_count: number;
   check_runs: Array<{ name: string; conclusion: string | null }>;
 }
 
@@ -28,9 +29,31 @@ interface PullRequestResponse {
 const root = fileURLToPath(new URL("..", import.meta.url));
 
 function checks(api: GitHubApi, repository: string, sha: string): CheckEvidence[] {
-  return api
-    .request<CheckRunsResponse>("GET", `repos/${repository}/commits/${sha}/check-runs?per_page=100`)
-    .check_runs.map(({ name, conclusion }) => ({ name, conclusion }));
+  const checkRuns: CheckRunsResponse["check_runs"] = [];
+  let totalCount: number | null = null;
+  for (let page = 1; page <= MAX_GITHUB_API_PAGES; page += 1) {
+    const response = api.request<CheckRunsResponse>(
+      "GET",
+      `repos/${repository}/commits/${sha}/check-runs?per_page=100&page=${page}`,
+    );
+    if (
+      !response ||
+      !Number.isInteger(response.total_count) ||
+      response.total_count < 0 ||
+      !Array.isArray(response.check_runs)
+    ) {
+      throw new Error("GitHub check-runs response was invalid.");
+    }
+    totalCount ??= response.total_count;
+    checkRuns.push(...response.check_runs);
+    if (checkRuns.length >= totalCount) {
+      return checkRuns.slice(0, totalCount).map(({ name, conclusion }) => ({ name, conclusion }));
+    }
+    if (response.check_runs.length === 0) break;
+  }
+  throw new Error(
+    `GitHub check runs exceeded the ${MAX_GITHUB_API_PAGES}-page safety limit or were incomplete.`,
+  );
 }
 
 function treeSha(api: GitHubApi, repository: string, sha: string): string {
@@ -47,13 +70,20 @@ function collectPullRequestEvidence(
     "GET",
     `repos/${repository}/commits/${sourceSha}/pulls?per_page=100`,
   );
-  return pullRequests.map((pullRequest) => ({
-    number: pullRequest.number,
-    merged: pullRequest.merged_at !== null,
-    headRepository: pullRequest.head.repo?.full_name ?? "",
-    headTreeSha: treeSha(api, repository, pullRequest.head.sha),
-    checks: checks(api, repository, pullRequest.head.sha),
-  }));
+  const normalizedRepository = repository.toLowerCase();
+  return pullRequests
+    .filter(
+      (pullRequest) =>
+        pullRequest.merged_at !== null &&
+        pullRequest.head.repo?.full_name.toLowerCase() === normalizedRepository,
+    )
+    .map((pullRequest) => ({
+      number: pullRequest.number,
+      merged: true,
+      headRepository: pullRequest.head.repo?.full_name ?? repository,
+      headTreeSha: treeSha(api, repository, pullRequest.head.sha),
+      checks: checks(api, repository, pullRequest.head.sha),
+    }));
 }
 
 function main(): void {
@@ -72,6 +102,9 @@ function main(): void {
   run("git", ["fetch", "--quiet", "origin", "main"], { cwd: root });
   const headSha = run("git", ["rev-parse", "HEAD"], { cwd: root });
   const expectedSha = process.env.RELEASE_SHA;
+  if (ci && !expectedSha) {
+    throw new Error("RELEASE_SHA must be provided for CI release checks.");
+  }
   if (expectedSha && expectedSha !== headSha) {
     throw new Error(`Expected release SHA ${expectedSha}, but checkout is ${headSha}.`);
   }

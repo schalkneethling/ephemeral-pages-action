@@ -2,6 +2,16 @@ import { execFileSync } from "node:child_process";
 
 const API_VERSION = "2026-03-10";
 const MAX_API_RESPONSE = 20 * 1024 * 1024;
+export const MAX_GITHUB_API_PAGES = 100;
+
+export interface GitRefTarget {
+  type: "commit" | "tag";
+  sha: string;
+}
+
+export interface GitRefResponse {
+  object: GitRefTarget;
+}
 
 export class GitHubApi {
   request<T>(
@@ -47,11 +57,31 @@ export class GitHubApi {
 
   paginated<T>(endpoint: string): T[] {
     const results: T[] = [];
-    for (let page = 1; ; page += 1) {
+    for (let page = 1; page <= MAX_GITHUB_API_PAGES; page += 1) {
       const separator = endpoint.includes("?") ? "&" : "?";
-      const values = this.request<T[]>("GET", `${endpoint}${separator}per_page=100&page=${page}`);
-      results.push(...values);
+      const values = this.request<unknown>(
+        "GET",
+        `${endpoint}${separator}per_page=100&page=${page}`,
+      );
+      if (!Array.isArray(values)) {
+        throw new Error(`GitHub API GET ${endpoint} did not return a list.`);
+      }
+      results.push(...(values as T[]));
       if (values.length < 100) return results;
     }
+    throw new Error(
+      `GitHub API GET ${endpoint} exceeded the ${MAX_GITHUB_API_PAGES}-page safety limit.`,
+    );
   }
+}
+
+export function resolveGitObject(api: GitHubApi, repository: string, object: GitRefTarget): string {
+  if (object.type === "commit") return object.sha;
+  const tag = api.request<GitRefResponse>("GET", `repos/${repository}/git/tags/${object.sha}`);
+  return resolveGitObject(api, repository, tag.object);
+}
+
+export function resolveGitRef(api: GitHubApi, repository: string, ref: string): string | null {
+  const response = api.optional<GitRefResponse>(`repos/${repository}/git/ref/${ref}`);
+  return response ? resolveGitObject(api, repository, response.object) : null;
 }

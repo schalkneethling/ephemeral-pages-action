@@ -13,9 +13,11 @@ describe("trusted workflow acceptance criteria", () => {
   it("pins every external action to a full commit SHA", () => {
     for (const name of readdirSync(workflowDirectory).filter((file) => file.endsWith(".yml"))) {
       for (const line of workflow(name).split("\n")) {
-        const use = line.match(/^\s*- uses: (.+)$/)?.[1];
-        if (!use || use === "./") continue;
-        expect(use, `${name}: ${use}`).toMatch(/^[\w.-]+\/[\w.-]+@[a-f0-9]{40}(?:\s+#\s+.+)?$/);
+        const use = line.match(/^\s*(?:-\s+)?uses:\s*(.+)$/)?.[1]?.trim();
+        if (!use || use.startsWith("./")) continue;
+        expect(use, `${name}: ${use}`).toMatch(
+          /^[\w.-]+\/[\w.-]+(?:\/[\w.-]+)*@[a-f0-9]{40}(?:\s+#\s+.+)?$/,
+        );
       }
     }
   });
@@ -27,6 +29,7 @@ describe("trusted workflow acceptance criteria", () => {
     expect(release.match(/contents: write/g)).toHaveLength(1);
     expect(release).toContain("RELEASE_GUARD: ${{ vars.RELEASE_GUARD }}");
     expect(release).toContain("cancel-in-progress: false");
+    expect(release.match(/timeout-minutes: 20/g)).toHaveLength(2);
   });
 
   it("gates rollback through the release environment and guard", () => {

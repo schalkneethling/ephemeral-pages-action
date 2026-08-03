@@ -2,7 +2,7 @@
 
 import { appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { GitHubApi } from "./lib/github.ts";
+import { GitHubApi, resolveGitRef } from "./lib/github.ts";
 import { readBoundedJson } from "./lib/io.ts";
 import {
   compareStableVersions,
@@ -29,33 +29,7 @@ interface ReleaseResponse {
   html_url: string;
 }
 
-interface RefResponse {
-  object: { type: "commit" | "tag"; sha: string };
-}
-
-interface TagResponse {
-  object: { type: "commit" | "tag"; sha: string };
-}
-
 const root = fileURLToPath(new URL("..", import.meta.url));
-
-function resolveObject(
-  api: GitHubApi,
-  repository: string,
-  object: { type: "commit" | "tag"; sha: string },
-): string {
-  if (object.type === "commit") return object.sha;
-  return resolveObject(
-    api,
-    repository,
-    api.request<TagResponse>("GET", `repos/${repository}/git/tags/${object.sha}`).object,
-  );
-}
-
-function resolveRef(api: GitHubApi, repository: string, ref: string): string | null {
-  const response = api.optional<RefResponse>(`repos/${repository}/git/ref/${ref}`);
-  return response ? resolveObject(api, repository, response.object) : null;
-}
 
 function resolveCommitish(api: GitHubApi, repository: string, commitish: string): string {
   return api.request<{ sha: string }>("GET", `repos/${repository}/commits/${commitish}`).sha;
@@ -114,8 +88,8 @@ function main(): void {
 
   const releases = api.paginated<ReleaseResponse>(`repos/${repository}/releases`);
   const existingResponse = releases.find((release) => release.tag_name === version.releaseTag);
-  const releaseTagSha = resolveRef(api, repository, `tags/${version.releaseTag}`);
-  const majorTagSha = resolveRef(api, repository, `tags/${version.majorTag}`);
+  const releaseTagSha = resolveGitRef(api, repository, `tags/${version.releaseTag}`);
+  const majorTagSha = resolveGitRef(api, repository, `tags/${version.majorTag}`);
   const majorVersions = releases
     .filter((release) => !release.draft)
     .map((release) => release.tag_name.match(/^v(.+)$/)?.[1])
@@ -152,7 +126,7 @@ function main(): void {
     return;
   }
 
-  if (resolveRef(api, repository, "heads/main") !== expectedSha) {
+  if (resolveGitRef(api, repository, "heads/main") !== expectedSha) {
     throw new Error("main changed after verification; refusing to mutate release state.");
   }
 
@@ -170,7 +144,7 @@ function main(): void {
   if (!release) throw new Error("GitHub did not return the release being published.");
 
   if (operations.includes("publish-release")) {
-    const currentMain = resolveRef(api, repository, "heads/main");
+    const currentMain = resolveGitRef(api, repository, "heads/main");
     if (currentMain !== expectedSha) {
       throw new Error("main changed after verification; refusing to publish the release.");
     }
@@ -197,8 +171,8 @@ function main(): void {
     }
   }
 
-  const verifiedReleaseTag = resolveRef(api, repository, `tags/${version.releaseTag}`);
-  const verifiedMajorTag = resolveRef(api, repository, `tags/${version.majorTag}`);
+  const verifiedReleaseTag = resolveGitRef(api, repository, `tags/${version.releaseTag}`);
+  const verifiedMajorTag = resolveGitRef(api, repository, `tags/${version.majorTag}`);
   if (verifiedReleaseTag !== expectedSha || verifiedMajorTag !== expectedSha) {
     throw new Error("Published release refs do not resolve to the verified release SHA.");
   }

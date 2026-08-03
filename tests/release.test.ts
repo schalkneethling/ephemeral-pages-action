@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  PUBLISH_CHECK_NAME,
+  QUALITY_CHECK_NAME,
   assertReleaseSource,
   compareStableVersions,
   planReleasePublication,
@@ -185,6 +187,19 @@ describe("release publication planning", () => {
     ).toThrow(/older than/i);
   });
 
+  it("rejects a latest release from another major line", () => {
+    expect(() =>
+      planReleasePublication({
+        version: "2.0.0",
+        sourceSha,
+        release: null,
+        releaseTagSha: null,
+        majorTagSha: null,
+        latestMajorRelease: "1.3.0",
+      }),
+    ).toThrow(/does not belong to v2/i);
+  });
+
   it("performs no mutation operations during a dry run", () => {
     const plan = {
       createRelease: true,
@@ -205,20 +220,29 @@ describe("release evidence", () => {
   const validEvidence = {
     repository: "owner/repo",
     sourceTreeSha: "tree-1",
-    mainChecks: [{ name: "quality", conclusion: "success" }],
+    mainChecks: [{ name: QUALITY_CHECK_NAME, conclusion: "success" }],
     pullRequests: [
       {
         number: 7,
         merged: true,
         headRepository: "owner/repo",
         headTreeSha: "tree-1",
-        checks: [{ name: "publish", conclusion: "success" }],
+        checks: [{ name: PUBLISH_CHECK_NAME, conclusion: "success" }],
       },
     ],
   };
 
   it("accepts a main commit whose exact tree passed CI and same-repository production smoke", () => {
     expect(verifyReleaseEvidence(validEvidence)).toEqual({ pullRequestNumber: 7 });
+  });
+
+  it("matches repository slugs case-insensitively", () => {
+    expect(
+      verifyReleaseEvidence({
+        ...validEvidence,
+        pullRequests: [{ ...validEvidence.pullRequests[0]!, headRepository: "OWNER/REPO" }],
+      }),
+    ).toEqual({ pullRequestNumber: 7 });
   });
 
   it("rejects missing post-merge quality evidence", () => {

@@ -68,6 +68,8 @@ export interface MajorRollbackState {
 }
 
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+export const QUALITY_CHECK_NAME = "quality";
+export const PUBLISH_CHECK_NAME = "publish";
 
 export function parseStableVersion(version: string): StableVersion {
   const match = STABLE_VERSION.exec(version);
@@ -169,27 +171,33 @@ function passed(checks: CheckEvidence[], name: string): boolean {
   return checks.some((check) => check.name === name && check.conclusion === "success");
 }
 
+function sameRepository(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
 export function verifyReleaseEvidence(evidence: ReleaseEvidence): { pullRequestNumber: number } {
-  if (!passed(evidence.mainChecks, "quality")) {
+  if (!passed(evidence.mainChecks, QUALITY_CHECK_NAME)) {
     throw new Error("The exact main commit does not have a successful quality check.");
   }
 
   const merged = evidence.pullRequests.filter((pullRequest) => pullRequest.merged);
-  const sameRepository = merged.filter(
-    (pullRequest) => pullRequest.headRepository === evidence.repository,
+  const sameRepositoryPullRequests = merged.filter((pullRequest) =>
+    sameRepository(pullRequest.headRepository, evidence.repository),
   );
-  if (sameRepository.length === 0) {
+  if (sameRepositoryPullRequests.length === 0) {
     throw new Error("The release must originate from a merged same-repository pull request.");
   }
 
-  const exactTree = sameRepository.filter(
+  const exactTree = sameRepositoryPullRequests.filter(
     (pullRequest) => pullRequest.headTreeSha === evidence.sourceTreeSha,
   );
   if (exactTree.length === 0) {
     throw new Error("No same-repository pull request tested the exact release tree.");
   }
 
-  const smokeTested = exactTree.find((pullRequest) => passed(pullRequest.checks, "publish"));
+  const smokeTested = exactTree.find((pullRequest) =>
+    passed(pullRequest.checks, PUBLISH_CHECK_NAME),
+  );
   if (!smokeTested) {
     throw new Error("The exact release tree does not have a successful production smoke check.");
   }

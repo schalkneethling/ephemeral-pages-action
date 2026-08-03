@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 export type Reviewer = { type: "User" | "Team"; id: number };
 
 export interface GitHubRuleset {
@@ -112,7 +114,7 @@ export function desiredRepositoryControls(options: {
 }
 
 function equal(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return isDeepStrictEqual(left, right);
 }
 
 export function planRepositoryControlChanges(

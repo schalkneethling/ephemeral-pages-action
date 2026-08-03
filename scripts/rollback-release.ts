@@ -2,16 +2,12 @@
 
 import { appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { GitHubApi } from "./lib/github.ts";
+import { GitHubApi, resolveGitRef } from "./lib/github.ts";
 import { readBoundedJson } from "./lib/io.ts";
 import { parseStableVersion, planMajorRollback } from "./lib/release.ts";
 
 interface ControlsConfig {
   repository: string;
-}
-
-interface RefObject {
-  object: { type: "commit" | "tag"; sha: string };
 }
 
 interface ReleaseResponse {
@@ -21,21 +17,6 @@ interface ReleaseResponse {
 }
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-
-function resolveObject(
-  api: GitHubApi,
-  repository: string,
-  object: { type: "commit" | "tag"; sha: string },
-): string {
-  if (object.type === "commit") return object.sha;
-  const tag = api.request<RefObject>("GET", `repos/${repository}/git/tags/${object.sha}`);
-  return resolveObject(api, repository, tag.object);
-}
-
-function resolveRef(api: GitHubApi, repository: string, ref: string): string | null {
-  const value = api.optional<RefObject>(`repos/${repository}/git/ref/${ref}`);
-  return value ? resolveObject(api, repository, value.object) : null;
-}
 
 function main(): void {
   const targetTag = process.env.ROLLBACK_TAG;
@@ -57,8 +38,8 @@ function main(): void {
   const release = api.optional<ReleaseResponse>(
     `repos/${config.repository}/releases/tags/${version.releaseTag}`,
   );
-  const targetSha = resolveRef(api, config.repository, `tags/${version.releaseTag}`);
-  const currentMajorSha = resolveRef(api, config.repository, `tags/${version.majorTag}`);
+  const targetSha = resolveGitRef(api, config.repository, `tags/${version.releaseTag}`);
+  const currentMajorSha = resolveGitRef(api, config.repository, `tags/${version.majorTag}`);
   const plan = planMajorRollback({
     targetVersion: version.version,
     targetSha,
@@ -80,7 +61,7 @@ function main(): void {
       });
     }
   }
-  if (resolveRef(api, config.repository, `tags/${plan.majorTag}`) !== targetSha) {
+  if (resolveGitRef(api, config.repository, `tags/${plan.majorTag}`) !== targetSha) {
     throw new Error("Floating major tag did not resolve to the requested rollback target.");
   }
 

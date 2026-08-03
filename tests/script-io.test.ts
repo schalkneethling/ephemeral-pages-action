@@ -45,9 +45,14 @@ describe("bounded release-script reads", () => {
 
   it("runs bounded subprocesses and reports failures without input data", () => {
     expect(run(process.execPath, ["--print", "'ok'"])).toBe("ok");
-    expect(() =>
-      run(process.execPath, ["--eval", "process.exit(2)"], { input: "release-secret" }),
-    ).toThrowError(/failed/);
+    let failureMessage = "";
+    try {
+      run(process.execPath, ["--eval", "process.exit(2)"], { input: "release-secret" });
+    } catch (error) {
+      failureMessage = error instanceof Error ? error.message : String(error);
+    }
+    expect(failureMessage).toMatch(/failed/);
+    expect(failureMessage).not.toContain("release-secret");
   });
 
   it("detects commands and supports inherited-stdio execution", () => {

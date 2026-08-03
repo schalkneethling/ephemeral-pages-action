@@ -23,6 +23,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       checks: read
       contents: read
@@ -63,6 +64,7 @@ jobs:
     if: ${{ needs.verify.result == 'success' && !inputs['dry-run'] }}
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: release
     permissions:
       contents: write

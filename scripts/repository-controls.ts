@@ -10,6 +10,7 @@ import {
   desiredRepositoryControls,
   mainRulesetPayload,
   normalizeCodeQlDefaultSetup,
+  normalizeDependabotSecurityUpdates,
   normalizeMainRuleset,
   normalizeRepositorySettings,
   normalizeReleaseEnvironment,
@@ -18,6 +19,7 @@ import {
 } from "./lib/repository-controls.ts";
 import type {
   GitHubCodeQlDefaultSetup,
+  GitHubDependabotSecurityUpdates,
   GitHubEnvironment,
   GitHubRepositorySettings,
   GitHubRuleset,
@@ -41,11 +43,6 @@ interface BranchPoliciesResponse {
 
 interface EnvironmentVariablesResponse {
   variables: Array<{ name: string; value: string }>;
-}
-
-interface DependabotSecurityUpdatesResponse {
-  enabled: boolean;
-  paused: boolean;
 }
 
 const CODEQL_VERIFICATION_ATTEMPTS = 12;
@@ -120,7 +117,7 @@ async function main(): Promise<void> {
     }>("GET", `repos/${repository}/actions/permissions/workflow`);
     const dependabotAlerts =
       api.optional<void>(`repos/${repository}/vulnerability-alerts`) !== null;
-    const dependabotSecurityUpdates = api.optional<DependabotSecurityUpdatesResponse>(
+    const dependabotSecurityUpdates = api.optional<GitHubDependabotSecurityUpdates>(
       `repos/${repository}/automated-security-fixes`,
     );
     const codeQlDefaultSetup = api.request<GitHubCodeQlDefaultSetup>(
@@ -162,7 +159,7 @@ async function main(): Promise<void> {
         },
         security: {
           dependabotAlerts,
-          dependabotSecurityUpdates: Boolean(dependabotSecurityUpdates?.enabled),
+          ...normalizeDependabotSecurityUpdates(dependabotSecurityUpdates),
           codeQlDefaultSetup: normalizeCodeQlDefaultSetup(codeQlDefaultSetup),
         },
         mainRuleset: normalizeMainRuleset(ruleset),
@@ -188,6 +185,11 @@ async function main(): Promise<void> {
     return;
   }
   if (changes.length === 0) return;
+  if (changes.some((change) => change.operation === "manual")) {
+    throw new Error(
+      "Dependabot security updates are paused and must be resumed in repository settings.",
+    );
+  }
   if (!yes && !(await confirmApply()))
     throw new Error("Repository-control changes were not applied.");
 

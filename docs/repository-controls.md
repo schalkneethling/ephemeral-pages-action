@@ -35,7 +35,8 @@ and reads the settings back before succeeding. It manages:
 CodeQL configuration is asynchronous. The apply command performs bounded polling and fails unless
 GitHub reports the committed desired state before the verification deadline. Dependabot version
 updates remain declarative in `.github/dependabot.yml`; tests require both npm and GitHub Actions
-update entries.
+update entries. If GitHub reports Dependabot security updates as paused, the planner requires
+manual remediation because the enable endpoint cannot resume them.
 
 ## Manual controls
 

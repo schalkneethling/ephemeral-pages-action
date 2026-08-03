@@ -5,6 +5,7 @@ import {
   desiredRepositoryControls,
   mainRulesetPayload,
   normalizeCodeQlDefaultSetup,
+  normalizeDependabotSecurityUpdates,
   normalizeMainRuleset,
   normalizeRepositorySettings,
   normalizeReleaseEnvironment,
@@ -42,6 +43,7 @@ describe("repository control acceptance criteria", () => {
     expect(desired.security).toEqual({
       dependabotAlerts: true,
       dependabotSecurityUpdates: true,
+      dependabotSecurityUpdatesPaused: false,
       codeQlDefaultSetup: {
         state: "configured",
         languages: ["actions", "javascript-typescript"],
@@ -84,13 +86,26 @@ describe("repository control acceptance criteria", () => {
     current.security.dependabotSecurityUpdates = false;
     current.security.codeQlDefaultSetup.state = "not-configured";
 
-    expect(planRepositoryControlChanges(current, desired).map((change) => change.control)).toEqual([
-      "immutable-releases",
-      "repository-settings",
-      "workflow-permissions",
-      "dependabot-alerts",
-      "dependabot-security-updates",
-      "codeql-default-setup",
+    expect(planRepositoryControlChanges(current, desired)).toEqual([
+      { control: "immutable-releases", operation: "enable" },
+      { control: "repository-settings", operation: "update" },
+      { control: "workflow-permissions", operation: "update" },
+      { control: "dependabot-alerts", operation: "enable" },
+      { control: "dependabot-security-updates", operation: "enable" },
+      { control: "codeql-default-setup", operation: "update" },
+    ]);
+  });
+
+  it("requires manual remediation when Dependabot security updates are paused", () => {
+    const current = matchingState();
+    Object.assign(
+      current.security,
+      normalizeDependabotSecurityUpdates({ enabled: true, paused: true }),
+    );
+
+    expect(current.security.dependabotSecurityUpdates).toBe(false);
+    expect(planRepositoryControlChanges(current, desired)).toEqual([
+      { control: "dependabot-security-updates", operation: "manual" },
     ]);
   });
 

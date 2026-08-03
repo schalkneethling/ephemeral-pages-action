@@ -95,7 +95,13 @@ export interface GitHubCodeQlDefaultSetup {
 export interface SecurityControl {
   dependabotAlerts: boolean;
   dependabotSecurityUpdates: boolean;
+  dependabotSecurityUpdatesPaused: boolean;
   codeQlDefaultSetup: CodeQlDefaultSetupControl;
+}
+
+export interface GitHubDependabotSecurityUpdates {
+  enabled: boolean;
+  paused: boolean;
 }
 
 export interface RepositoryControlState {
@@ -128,7 +134,7 @@ export type RepositoryControlChange = {
     | "codeql-default-setup"
     | "main-ruleset"
     | "release-environment";
-  operation: "enable" | "update" | "create";
+  operation: "enable" | "update" | "create" | "manual";
 };
 
 export function desiredRepositoryControls(options: {
@@ -153,6 +159,7 @@ export function desiredRepositoryControls(options: {
     security: {
       dependabotAlerts: true,
       dependabotSecurityUpdates: true,
+      dependabotSecurityUpdatesPaused: false,
       codeQlDefaultSetup: {
         state: "configured",
         languages: ["actions", "javascript-typescript"],
@@ -213,7 +220,11 @@ export function planRepositoryControlChanges(
   if (current.security.dependabotAlerts !== desired.security.dependabotAlerts) {
     changes.push({ control: "dependabot-alerts", operation: "enable" });
   }
-  if (current.security.dependabotSecurityUpdates !== desired.security.dependabotSecurityUpdates) {
+  if (current.security.dependabotSecurityUpdatesPaused) {
+    changes.push({ control: "dependabot-security-updates", operation: "manual" });
+  } else if (
+    current.security.dependabotSecurityUpdates !== desired.security.dependabotSecurityUpdates
+  ) {
     changes.push({ control: "dependabot-security-updates", operation: "enable" });
   }
   if (!equal(current.security.codeQlDefaultSetup, desired.security.codeQlDefaultSetup)) {
@@ -233,6 +244,15 @@ export function planRepositoryControlChanges(
   }
 
   return changes;
+}
+
+export function normalizeDependabotSecurityUpdates(
+  updates: GitHubDependabotSecurityUpdates | null,
+): Pick<SecurityControl, "dependabotSecurityUpdates" | "dependabotSecurityUpdatesPaused"> {
+  return {
+    dependabotSecurityUpdates: Boolean(updates?.enabled && !updates.paused),
+    dependabotSecurityUpdatesPaused: Boolean(updates?.paused),
+  };
 }
 
 export function normalizeRepositorySettings(

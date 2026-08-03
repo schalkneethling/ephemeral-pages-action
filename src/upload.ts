@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MAX_UPLOAD_ATTEMPTS, REQUEST_TIMEOUT_MS } from "./constants.js";
+import { MAX_RETRY_DELAY_MS, MAX_UPLOAD_ATTEMPTS, REQUEST_TIMEOUT_MS } from "./constants.js";
 import type { UploadResponse } from "./types.js";
 
 export interface UploadDependencies {
@@ -18,8 +18,15 @@ export function normalizeServiceOrigin(value: string): string {
   } catch {
     throw new Error("service-url must be a valid absolute URL.");
   }
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
-    throw new Error("service-url must be an HTTP(S) origin without credentials.");
+  const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (
+    (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback)) ||
+    url.username ||
+    url.password
+  ) {
+    throw new Error(
+      "service-url must use HTTPS (HTTP is allowed only for loopback) and must not include credentials.",
+    );
   }
   if (url.pathname !== "/" || url.search || url.hash) {
     throw new Error("service-url must contain only an origin, without a path, query, or fragment.");
@@ -43,9 +50,13 @@ function retryAfterMilliseconds(response: Response, attempt: number, random: () 
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) {
     const seconds = Number(retryAfter);
-    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1000, MAX_RETRY_DELAY_MS);
+    }
     const dateDelay = Date.parse(retryAfter) - Date.now();
-    if (Number.isFinite(dateDelay) && dateDelay >= 0) return dateDelay;
+    if (Number.isFinite(dateDelay) && dateDelay >= 0) {
+      return Math.min(dateDelay, MAX_RETRY_DELAY_MS);
+    }
   }
   const exponential = Math.min(1000 * 2 ** (attempt - 1), 8000);
   return Math.round(exponential * (0.75 + random() * 0.5));
@@ -119,6 +130,7 @@ export async function uploadReport(
         method: "POST",
         headers,
         body,
+        redirect: "manual",
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {

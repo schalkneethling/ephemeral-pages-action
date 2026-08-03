@@ -6,9 +6,16 @@ import { ALLOWED_TTLS, MAX_COMPRESSED_BYTES, MAX_RAW_BYTES } from "./constants.j
 
 const brotliCompress = promisify(brotliCompressCallback);
 
-function isInside(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== "..");
+type PathOperations = Pick<typeof path, "isAbsolute" | "relative" | "sep">;
+
+export function isPathInside(
+  parent: string,
+  child: string,
+  pathOperations: PathOperations = path,
+): boolean {
+  const relative = pathOperations.relative(parent, child);
+  if (pathOperations.isAbsolute(relative)) return false;
+  return relative === "" || (!relative.startsWith(`..${pathOperations.sep}`) && relative !== "..");
 }
 
 export function parseTtl(value: string): number {
@@ -34,7 +41,7 @@ export async function readReport(workspace: string, reportPath: string): Promise
 
   const workspaceRealPath = await fs.realpath(workspace);
   const resolvedPath = path.resolve(workspaceRealPath, reportPath);
-  if (!isInside(workspaceRealPath, resolvedPath)) {
+  if (!isPathInside(workspaceRealPath, resolvedPath)) {
     throw new Error("report-path must remain inside the GitHub workspace.");
   }
 
@@ -49,7 +56,7 @@ export async function readReport(workspace: string, reportPath: string): Promise
   }
 
   const realPath = await fs.realpath(resolvedPath);
-  if (!isInside(workspaceRealPath, realPath)) {
+  if (!isPathInside(workspaceRealPath, realPath)) {
     throw new Error("report-path resolves outside the GitHub workspace.");
   }
   if (stats.size > MAX_RAW_BYTES) {

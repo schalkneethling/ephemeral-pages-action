@@ -13,7 +13,9 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Create self-contained test report
         shell: bash
@@ -37,4 +39,12 @@ jobs:
           EXPIRES_AT: ${{ steps.publish-report.outputs.expires-at }}
           COMMENT_ID: ${{ steps.publish-report.outputs.comment-id }}
         shell: bash
-        run: test -n "$PAGE_ID" && test -n "$PAGE_URL" && test -n "$EXPIRES_AT" && test -n "$COMMENT_ID"
+        run: |
+          test -n "$PAGE_ID"
+          test -n "$PAGE_URL"
+          test -n "$EXPIRES_AT"
+          test -n "$COMMENT_ID"
+
+          REPORT_CONTENT_URL="${PAGE_URL%/p/*}/api/pages/${PAGE_ID}/content"
+          curl --fail --silent --show-error --max-time 30 "$REPORT_CONTENT_URL" |
+            grep -F "self-contained report rendered successfully."

@@ -20,7 +20,7 @@
     "bundle:check": "pnpm build && git diff --exit-code -- dist/index.js dist/index.js.map dist/package.json dist/sourcemap-register.cjs",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "lint": "oxlint src tests",
+    "lint": "oxlint --config oxlint.json src tests",
     "test": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "quality": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm bundle:check"

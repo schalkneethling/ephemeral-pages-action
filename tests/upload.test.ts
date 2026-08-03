@@ -41,6 +41,10 @@ function dependencies(
 describe("service and idempotency helpers", () => {
   it("normalizes a service origin", () => {
     expect(normalizeServiceOrigin("https://ephemeral.example/")).toBe("https://ephemeral.example");
+    expect(normalizeServiceOrigin("http://localhost:8788/")).toBe("http://localhost:8788");
+    expect(normalizeServiceOrigin("http://127.0.0.1/")).toBe("http://127.0.0.1");
+    expect(normalizeServiceOrigin("http://[::1]/")).toBe("http://[::1]");
+    expect(() => normalizeServiceOrigin("http://ephemeral.example/")).toThrow(/HTTPS/);
     expect(() => normalizeServiceOrigin("https://ephemeral.example/path")).toThrow(/origin/);
   });
 
@@ -78,6 +82,7 @@ describe("uploadReport", () => {
       authorization: "Bearer oidc-secret",
       "idempotency-key": "stable-key",
     });
+    expect(init?.redirect).toBe("manual");
     expect(deps.getIdToken).toHaveBeenCalledWith("https://ephemeral.example");
     expect(deps.setSecret).toHaveBeenCalledWith("oidc-secret");
   });
@@ -109,6 +114,19 @@ describe("uploadReport", () => {
     ).toEqual(["same-key", "same-key"]);
   });
 
+  it.each(["86400", "Wed, 02 Aug 2030 22:00:00 GMT"])(
+    "caps Retry-After value %s",
+    async (retryAfter) => {
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(response(429, { "retry-after": retryAfter }))
+        .mockResolvedValueOnce(response());
+      const deps = dependencies(fetchMock);
+      await uploadReport("https://ephemeral.example", "YnI=", 12, "key", deps);
+      expect(deps.sleep).toHaveBeenCalledWith(30_000);
+    },
+  );
+
   it("retries network and transient server failures", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -134,5 +152,15 @@ describe("uploadReport", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(String(error)).not.toContain("oidc-secret");
     expect(String(error)).not.toContain("YnI=");
+  });
+
+  it("does not follow redirects", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response(307));
+    const deps = dependencies(fetchMock);
+    await expect(
+      uploadReport("https://ephemeral.example", "YnI=", 12, "key", deps),
+    ).rejects.toThrow(/HTTP 307/);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]![1]?.redirect).toBe("manual");
   });
 });

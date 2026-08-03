@@ -49,13 +49,13 @@ jobs:
 
 ## Inputs
 
-| Input          | Required | Default                                 | Description                                                                      |
-| -------------- | -------- | --------------------------------------- | -------------------------------------------------------------------------------- |
-| `report-path`  | Yes      | —                                       | Path to a self-contained HTML report, resolved inside `GITHUB_WORKSPACE`.        |
-| `ttl-hours`    | No       | `12`                                    | One of `1`, `3`, `5`, `7`, `12`, `24`, `72`, `120`, or `168`.                    |
-| `report-name`  | No       | `Accessibility report`                  | Heading used in the PR comment. Each normalized name has its own stable comment. |
-| `service-url`  | No       | `https://ephemeral.schalkneethling.com` | Ephemeral Pages service origin.                                                  |
-| `github-token` | Yes      | —                                       | The automatic `${{ github.token }}` used for PR comments.                        |
+| Input          | Required | Default                                 | Description                                                                                         |
+| -------------- | -------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `report-path`  | Yes      | —                                       | Path to a self-contained HTML report, resolved inside `GITHUB_WORKSPACE`.                           |
+| `ttl-hours`    | No       | `12`                                    | One of `1`, `3`, `5`, `7`, `12`, `24`, `72`, `120`, or `168`.                                       |
+| `report-name`  | No       | `Accessibility report`                  | Heading used in the PR comment. Each normalized name has its own stable comment.                    |
+| `service-url`  | No       | `https://ephemeral.schalkneethling.com` | HTTPS Ephemeral Pages service origin. Plain HTTP is accepted only for loopback development origins. |
+| `github-token` | Yes      | —                                       | The automatic `${{ github.token }}` used for PR comments.                                           |
 
 ## Outputs
 
@@ -75,7 +75,8 @@ Upload outputs are set before commenting. If the upload succeeds but GitHub comm
 - Raw HTML is limited to 20 MiB. Brotli-compressed bytes are limited to 2 MiB.
 - The OIDC audience is the normalized service origin. Tokens and report contents are never included in Action errors.
 - Uploads use a stable idempotency key derived from repository ID, run ID, run attempt, and normalized report path. Retries in one attempt reuse the key; a new run attempt receives a new key.
-- Network errors, `429`, and transient `5xx` responses are retried across up to three attempts. `Retry-After` is honored; otherwise the Action uses bounded exponential backoff with jitter.
+- Network errors, `429`, and transient `5xx` responses are retried across up to three attempts. `Retry-After` is honored up to a 30-second ceiling; otherwise the Action uses bounded exponential backoff with jitter.
+- Upload redirects are rejected so report content cannot be replayed to a different origin.
 - The returned page URL must have the configured service origin.
 - Existing comments are updated only when they have the exact report marker and were authored by `github-actions[bot]` or the authenticated token owner.
 

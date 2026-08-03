@@ -5,7 +5,7 @@ import { brotliDecompressSync } from "node:zlib";
 import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { ALLOWED_TTLS, MAX_RAW_BYTES } from "../src/constants.js";
-import { encodeReport, parseTtl, readReport } from "../src/report.js";
+import { encodeReport, isPathInside, parseTtl, readReport } from "../src/report.js";
 
 const directories: string[] = [];
 
@@ -32,6 +32,11 @@ describe("parseTtl", () => {
 });
 
 describe("readReport", () => {
+  it("rejects a Windows cross-drive path", () => {
+    expect(isPathInside("C:\\workspace", "D:\\report.html", path.win32)).toBe(false);
+    expect(isPathInside("C:\\workspace", "C:\\workspace\\report.html", path.win32)).toBe(true);
+  });
+
   it("reads and normalizes a regular file inside the workspace", async () => {
     const workspace = await temporaryDirectory();
     await fs.mkdir(path.join(workspace, "reports"));

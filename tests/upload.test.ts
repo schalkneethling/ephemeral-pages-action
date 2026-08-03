@@ -114,7 +114,7 @@ describe("uploadReport", () => {
     ).toEqual(["same-key", "same-key"]);
   });
 
-  it.each(["86400", "Wed, 02 Aug 2030 22:00:00 GMT"])(
+  it.each(["86400", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString()])(
     "caps Retry-After value %s",
     async (retryAfter) => {
       const fetchMock = vi

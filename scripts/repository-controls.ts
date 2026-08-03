@@ -2,17 +2,24 @@
 
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
+import { isDeepStrictEqual } from "node:util";
 import { GitHubApi } from "./lib/github.ts";
 import { readBoundedJson, run } from "./lib/io.ts";
 import {
+  codeQlDefaultSetupPayload,
   desiredRepositoryControls,
   mainRulesetPayload,
+  normalizeCodeQlDefaultSetup,
   normalizeMainRuleset,
+  normalizeRepositorySettings,
   normalizeReleaseEnvironment,
   planRepositoryControlChanges,
+  repositorySettingsPayload,
 } from "./lib/repository-controls.ts";
 import type {
+  GitHubCodeQlDefaultSetup,
   GitHubEnvironment,
+  GitHubRepositorySettings,
   GitHubRuleset,
   RepositoryControlChange,
   RepositoryControlState,
@@ -22,7 +29,10 @@ interface ControlsConfig {
   schemaVersion: 1;
   repository: string;
   releaseReviewer: string;
-  manualControls: { disableEnvironmentAdminBypass: true };
+  manualControls: {
+    disableEnvironmentAdminBypass: true;
+    dependabotMalwareAlerts: true;
+  };
 }
 
 interface BranchPoliciesResponse {
@@ -32,6 +42,14 @@ interface BranchPoliciesResponse {
 interface EnvironmentVariablesResponse {
   variables: Array<{ name: string; value: string }>;
 }
+
+interface DependabotSecurityUpdatesResponse {
+  enabled: boolean;
+  paused: boolean;
+}
+
+const CODEQL_VERIFICATION_ATTEMPTS = 12;
+const CODEQL_VERIFICATION_DELAY_MS = 5_000;
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const configPath = fileURLToPath(new URL("../.github/repository-controls.json", import.meta.url));
@@ -61,6 +79,12 @@ async function main(): Promise<void> {
   const config = readBoundedJson<ControlsConfig>(configPath);
   if (config.schemaVersion !== 1)
     throw new Error("Unsupported repository-controls schema version.");
+  if (
+    config.manualControls.disableEnvironmentAdminBypass !== true ||
+    config.manualControls.dependabotMalwareAlerts !== true
+  ) {
+    throw new Error("Required manual repository controls are not declared.");
+  }
 
   run("gh", ["auth", "status"], { cwd: root, quiet: true });
   const repository = run(
@@ -88,11 +112,21 @@ async function main(): Promise<void> {
     rulesetId: number | null;
     branchPolicies: Array<{ id: number; name: string }>;
   } => {
+    const repositorySettings = api.request<GitHubRepositorySettings>("GET", `repos/${repository}`);
     const immutable = api.optional<{ enabled: boolean }>(`repos/${repository}/immutable-releases`);
     const workflow = api.request<{
       default_workflow_permissions: "read" | "write";
       can_approve_pull_request_reviews: boolean;
     }>("GET", `repos/${repository}/actions/permissions/workflow`);
+    const dependabotAlerts =
+      api.optional<void>(`repos/${repository}/vulnerability-alerts`) !== null;
+    const dependabotSecurityUpdates = api.optional<DependabotSecurityUpdatesResponse>(
+      `repos/${repository}/automated-security-fixes`,
+    );
+    const codeQlDefaultSetup = api.request<GitHubCodeQlDefaultSetup>(
+      "GET",
+      `repos/${repository}/code-scanning/default-setup`,
+    );
     const rulesets = api.request<Array<{ id: number; name: string }>>(
       "GET",
       `repos/${repository}/rulesets`,
@@ -121,9 +155,15 @@ async function main(): Promise<void> {
     return {
       state: {
         immutableReleases: Boolean(immutable?.enabled),
+        repositorySettings: normalizeRepositorySettings(repositorySettings),
         workflowPermissions: {
           defaultWorkflowPermissions: workflow.default_workflow_permissions,
           canApprovePullRequestReviews: workflow.can_approve_pull_request_reviews,
+        },
+        security: {
+          dependabotAlerts,
+          dependabotSecurityUpdates: Boolean(dependabotSecurityUpdates?.enabled),
+          codeQlDefaultSetup: normalizeCodeQlDefaultSetup(codeQlDefaultSetup),
         },
         mainRuleset: normalizeMainRuleset(ruleset),
         releaseEnvironment: normalizedEnvironment,
@@ -139,6 +179,9 @@ async function main(): Promise<void> {
   console.log(
     "Manual control: verify that administrators cannot bypass the release environment protection rules.",
   );
+  console.log(
+    `Manual control: verify Dependabot malware alerts at https://github.com/${repository}/settings/security_analysis.`,
+  );
 
   if (!apply) {
     if (changes.length > 0) process.exitCode = 1;
@@ -151,11 +194,27 @@ async function main(): Promise<void> {
   for (const change of changes) {
     if (change.control === "immutable-releases") {
       api.request("PUT", `repos/${repository}/immutable-releases`);
+    } else if (change.control === "repository-settings") {
+      api.request(
+        "PATCH",
+        `repos/${repository}`,
+        repositorySettingsPayload(desired.repositorySettings),
+      );
     } else if (change.control === "workflow-permissions") {
       api.request("PUT", `repos/${repository}/actions/permissions/workflow`, {
         default_workflow_permissions: desired.workflowPermissions.defaultWorkflowPermissions,
         can_approve_pull_request_reviews: desired.workflowPermissions.canApprovePullRequestReviews,
       });
+    } else if (change.control === "dependabot-alerts") {
+      api.request("PUT", `repos/${repository}/vulnerability-alerts`);
+    } else if (change.control === "dependabot-security-updates") {
+      api.request("PUT", `repos/${repository}/automated-security-fixes`);
+    } else if (change.control === "codeql-default-setup") {
+      api.request(
+        "PATCH",
+        `repos/${repository}/code-scanning/default-setup`,
+        codeQlDefaultSetupPayload(desired.security.codeQlDefaultSetup),
+      );
     } else if (change.control === "main-ruleset" && desired.mainRuleset) {
       let rulesetId = current.rulesetId;
       if (rulesetId === null) {
@@ -218,6 +277,22 @@ async function main(): Promise<void> {
           { name: "RELEASE_GUARD", value: environment.guardValue },
         );
       }
+    }
+  }
+
+  if (changes.some((change) => change.control === "codeql-default-setup")) {
+    for (let attempt = 1; attempt <= CODEQL_VERIFICATION_ATTEMPTS; attempt += 1) {
+      const configured = normalizeCodeQlDefaultSetup(
+        api.request<GitHubCodeQlDefaultSetup>(
+          "GET",
+          `repos/${repository}/code-scanning/default-setup`,
+        ),
+      );
+      if (isDeepStrictEqual(configured, desired.security.codeQlDefaultSetup)) break;
+      if (attempt === CODEQL_VERIFICATION_ATTEMPTS) {
+        throw new Error("CodeQL default setup did not reach the desired state in time.");
+      }
+      await new Promise((resolve) => setTimeout(resolve, CODEQL_VERIFICATION_DELAY_MS));
     }
   }
 

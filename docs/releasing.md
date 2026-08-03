@@ -7,7 +7,8 @@ commands validate and dispatch; the protected `release` environment controls the
 ## One-time repository setup
 
 The desired controls are committed in `.github/repository-controls.json` and implemented by
-`scripts/repository-controls.ts`.
+`scripts/repository-controls.ts`. See [Repository controls](repository-controls.md) for the full
+automated and manual control inventory.
 
 From a clean, synchronized `main` branch, inspect and apply the controls:
 
@@ -24,8 +25,10 @@ The apply command shows its plan and requests confirmation. For unattended admin
 pnpm repo:controls:apply -- --yes
 ```
 
-It enables immutable Releases, keeps the default Actions token read-only, creates or updates the
-`protect-main` ruleset, and configures the `release` environment with:
+It also normalizes repository merge settings, enables the dependency graph and Dependabot,
+configures CodeQL default setup, enables immutable Releases, keeps the default Actions token
+read-only, creates or updates the `protect-main` ruleset, and configures the `release` environment
+with:
 
 - Schalk Neethling as the required reviewer;
 - self-review allowed while the project has one release maintainer;
@@ -35,10 +38,11 @@ It enables immutable Releases, keeps the default Actions token read-only, create
 The script is idempotent and verifies the controls after applying them. It identifies named
 controls and updates them instead of creating duplicates.
 
-GitHub does not currently expose the environment's administrator-bypass setting through the REST
-environment schema. In **Settings → Environments → release**, disable administrator bypass
-manually. The environment guard ensures that deleting and implicitly recreating the environment
-without its configuration cannot publish a release.
+GitHub does not currently expose the environment's administrator-bypass setting or the personal
+repository's Dependabot malware-alert toggle through supported repository APIs. Complete both
+manual controls described in [Repository controls](repository-controls.md). The environment guard
+ensures that deleting and implicitly recreating the environment without its configuration cannot
+publish a release.
 
 ## Prepare a release
 

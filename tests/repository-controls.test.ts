@@ -1,10 +1,15 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  codeQlDefaultSetupPayload,
   desiredRepositoryControls,
   mainRulesetPayload,
+  normalizeCodeQlDefaultSetup,
   normalizeMainRuleset,
+  normalizeRepositorySettings,
   normalizeReleaseEnvironment,
   planRepositoryControlChanges,
+  repositorySettingsPayload,
 } from "../scripts/lib/repository-controls.js";
 import type {
   GitHubEnvironment,
@@ -18,15 +23,38 @@ function matchingState(): RepositoryControlState {
 }
 
 describe("repository control acceptance criteria", () => {
-  it("declares immutable releases, read-only Actions, main protection, and release approval", () => {
+  it("declares repository, security, branch, Actions, and release controls", () => {
     expect(desired.immutableReleases).toBe(true);
+    expect(desired.repositorySettings).toEqual({
+      wiki: false,
+      projects: false,
+      squashMerge: false,
+      mergeCommit: true,
+      rebaseMerge: true,
+      autoMerge: true,
+      deleteBranchOnMerge: true,
+      updateBranch: true,
+    });
     expect(desired.workflowPermissions).toEqual({
       defaultWorkflowPermissions: "read",
       canApprovePullRequestReviews: false,
     });
+    expect(desired.security).toEqual({
+      dependabotAlerts: true,
+      dependabotSecurityUpdates: true,
+      codeQlDefaultSetup: {
+        state: "configured",
+        languages: ["actions", "javascript-typescript"],
+        querySuite: "default",
+        threatModel: "remote",
+        runnerType: "standard",
+        runnerLabel: null,
+      },
+    });
     expect(desired.mainRuleset.enforcement).toBe("active");
     expect(desired.mainRuleset.targetDefaultBranch).toBe(true);
     expect(desired.mainRuleset.requiredChecks).toEqual(["quality"]);
+    expect(desired.mainRuleset.allowedMergeMethods).toEqual(["merge", "rebase"]);
     expect(desired.releaseEnvironment.reviewers).toEqual([{ type: "User", id: 42 }]);
     expect(desired.releaseEnvironment.branches).toEqual(["main"]);
     expect(desired.releaseEnvironment.customBranchesOnly).toBe(true);
@@ -50,12 +78,44 @@ describe("repository control acceptance criteria", () => {
   it("plans only controls that have drifted", () => {
     const current = matchingState();
     current.immutableReleases = false;
+    current.repositorySettings.wiki = true;
     current.workflowPermissions.defaultWorkflowPermissions = "write";
+    current.security.dependabotAlerts = false;
+    current.security.dependabotSecurityUpdates = false;
+    current.security.codeQlDefaultSetup.state = "not-configured";
 
     expect(planRepositoryControlChanges(current, desired).map((change) => change.control)).toEqual([
       "immutable-releases",
+      "repository-settings",
       "workflow-permissions",
+      "dependabot-alerts",
+      "dependabot-security-updates",
+      "codeql-default-setup",
     ]);
+  });
+
+  it("round-trips repository settings through the GitHub API shape", () => {
+    expect(
+      normalizeRepositorySettings(repositorySettingsPayload(desired.repositorySettings)),
+    ).toEqual(desired.repositorySettings);
+  });
+
+  it("normalizes GitHub's JavaScript and TypeScript CodeQL language aliases", () => {
+    expect(
+      normalizeCodeQlDefaultSetup({
+        ...codeQlDefaultSetupPayload(desired.security.codeQlDefaultSetup),
+        languages: ["actions", "javascript", "javascript-typescript", "typescript"],
+      }),
+    ).toEqual(desired.security.codeQlDefaultSetup);
+  });
+
+  it("preserves additional CodeQL languages when checking drift", () => {
+    const current = matchingState();
+    current.security.codeQlDefaultSetup.languages.push("python");
+    expect(planRepositoryControlChanges(current, desired)).toContainEqual({
+      control: "codeql-default-setup",
+      operation: "update",
+    });
   });
 
   it("creates missing controls without duplicating existing controls", () => {
@@ -107,5 +167,24 @@ describe("repository control acceptance criteria", () => {
         [{ name: "RELEASE_GUARD", value: "approved-release-environment-v1" }],
       ),
     ).toEqual(desired.releaseEnvironment);
+  });
+
+  it("keeps version updates configured for npm and GitHub Actions", () => {
+    const configuration = readFileSync(
+      new URL("../.github/dependabot.yml", import.meta.url),
+      "utf8",
+    );
+    expect(configuration).toContain('package-ecosystem: "npm"');
+    expect(configuration).toContain('package-ecosystem: "github-actions"');
+  });
+
+  it("declares the repository controls that still require manual verification", () => {
+    const configuration = JSON.parse(
+      readFileSync(new URL("../.github/repository-controls.json", import.meta.url), "utf8"),
+    ) as { manualControls: Record<string, boolean> };
+    expect(configuration.manualControls).toEqual({
+      disableEnvironmentAdminBypass: true,
+      dependabotMalwareAlerts: true,
+    });
   });
 });

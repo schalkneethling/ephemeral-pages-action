@@ -3,6 +3,7 @@
   "repository": "schalkneethling/ephemeral-pages-action",
   "releaseReviewer": "schalkneethling",
   "manualControls": {
-    "disableEnvironmentAdminBypass": true
+    "disableEnvironmentAdminBypass": true,
+    "dependabotMalwareAlerts": true
   }
 }

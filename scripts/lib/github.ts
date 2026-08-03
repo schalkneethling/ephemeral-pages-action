@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 
 const API_VERSION = "2026-03-10";
 const MAX_API_RESPONSE = 20 * 1024 * 1024;
+const MAX_TAG_RESOLUTION_DEPTH = 10;
 export const MAX_GITHUB_API_PAGES = 100;
 
 export interface GitRefTarget {
@@ -75,10 +76,20 @@ export class GitHubApi {
   }
 }
 
-export function resolveGitObject(api: GitHubApi, repository: string, object: GitRefTarget): string {
+export function resolveGitObject(
+  api: GitHubApi,
+  repository: string,
+  object: GitRefTarget,
+  depth = 0,
+): string {
   if (object.type === "commit") return object.sha;
+  if (depth >= MAX_TAG_RESOLUTION_DEPTH) {
+    throw new Error(
+      `Git tag resolution exceeded the ${MAX_TAG_RESOLUTION_DEPTH}-level safety limit.`,
+    );
+  }
   const tag = api.request<GitRefResponse>("GET", `repos/${repository}/git/tags/${object.sha}`);
-  return resolveGitObject(api, repository, tag.object);
+  return resolveGitObject(api, repository, tag.object, depth + 1);
 }
 
 export function resolveGitRef(api: GitHubApi, repository: string, ref: string): string | null {

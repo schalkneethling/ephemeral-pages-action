@@ -32,4 +32,17 @@ describe("GitHub API safety helpers", () => {
     ]);
     expect(resolveGitRef(api, "owner/repo", "tags/v1.0.0")).toBe("commit-sha");
   });
+
+  it("returns null when a ref does not exist", () => {
+    expect(resolveGitRef(new StubGitHubApi([undefined]), "owner/repo", "tags/v1.0.0")).toBeNull();
+  });
+
+  it("rejects annotated-tag chains beyond the safety limit", () => {
+    const nestedTags = Array.from({ length: 11 }, (_, index) => ({
+      object: { type: "tag", sha: `tag-${index}` },
+    }));
+    expect(() => resolveGitRef(new StubGitHubApi(nestedTags), "owner/repo", "tags/v1.0.0")).toThrow(
+      /10-level safety limit/i,
+    );
+  });
 });

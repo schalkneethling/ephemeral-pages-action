@@ -1,0 +1,14 @@
+{
+  "plugins": [
+    "eslint",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "import",
+    "node",
+    "promise",
+    "vitest",
+    "jsdoc"
+  ],
+  "rules": {}
+}

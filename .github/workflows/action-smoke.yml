@@ -1,0 +1,50 @@
+name: Production smoke test
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  publish:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Create self-contained test report
+        shell: bash
+        run: |
+          mkdir -p smoke-report
+          cp test-fixtures/smoke-report.html smoke-report/index.html
+
+      - name: Publish test report
+        id: publish-report
+        uses: ./
+        with:
+          report-path: smoke-report/index.html
+          ttl-hours: "1"
+          report-name: Ephemeral Pages Action smoke test
+          github-token: ${{ github.token }}
+
+      - name: Verify outputs
+        env:
+          PAGE_ID: ${{ steps.publish-report.outputs.page-id }}
+          PAGE_URL: ${{ steps.publish-report.outputs.page-url }}
+          EXPIRES_AT: ${{ steps.publish-report.outputs.expires-at }}
+          COMMENT_ID: ${{ steps.publish-report.outputs.comment-id }}
+        shell: bash
+        run: |
+          test -n "$PAGE_ID"
+          test -n "$PAGE_URL"
+          test -n "$EXPIRES_AT"
+          test -n "$COMMENT_ID"
+
+          REPORT_CONTENT_URL="${PAGE_URL%/p/*}/api/pages/${PAGE_ID}/content"
+          curl --fail --silent --show-error --max-time 30 "$REPORT_CONTENT_URL" |
+            grep -F "self-contained report rendered successfully."

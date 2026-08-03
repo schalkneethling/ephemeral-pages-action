@@ -1,0 +1,41 @@
+name: Ephemeral Pages
+description: Publish a self-contained HTML report and maintain its pull-request comment.
+author: Schalk Neethling
+
+branding:
+  icon: external-link
+  color: purple
+
+inputs:
+  report-path:
+    description: Path to the self-contained HTML report
+    required: true
+  ttl-hours:
+    description: Ephemeral Pages TTL in hours
+    required: false
+    default: "12"
+  report-name:
+    description: Label shown in the pull request comment
+    required: false
+    default: Accessibility report
+  service-url:
+    description: Ephemeral Pages service origin
+    required: false
+    default: https://ephemeral.schalkneethling.com
+  github-token:
+    description: Automatic GitHub token used to create or update the PR comment
+    required: true
+
+outputs:
+  page-id:
+    description: Ephemeral Pages page identifier
+  page-url:
+    description: Absolute report URL
+  expires-at:
+    description: ISO-8601 expiration timestamp
+  comment-id:
+    description: GitHub ID of the created or updated PR comment
+
+runs:
+  using: node24
+  main: dist/index.js

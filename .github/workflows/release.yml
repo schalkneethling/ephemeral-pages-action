@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected-sha:
+        description: Exact main commit that was checked locally
+        required: true
+        type: string
+      dry-run:
+        description: Verify the release without creating or moving refs
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs['expected-sha'] }}
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 11.10.0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm quality
+
+      - name: Verify release source and evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs['expected-sha'] }}
+        run: node scripts/release-check.ts --ci
+
+      - name: Verify publication plan without mutations
+        if: inputs['dry-run']
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs['expected-sha'] }}
+        run: node scripts/publish-release.ts --dry-run
+
+  publish:
+    if: ${{ needs.verify.result == 'success' && !inputs['dry-run'] }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ inputs['expected-sha'] }}
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Publish immutable release and update floating tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_GUARD: ${{ vars.RELEASE_GUARD }}
+          RELEASE_SHA: ${{ inputs['expected-sha'] }}
+        run: node scripts/publish-release.ts

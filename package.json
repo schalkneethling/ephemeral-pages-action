@@ -20,9 +20,13 @@
     "bundle:check": "pnpm build && git diff --exit-code -- dist/index.js dist/index.js.map dist/package.json dist/sourcemap-register.cjs",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "lint": "oxlint --config oxlint.json src tests",
+    "lint": "oxlint --config oxlint.json src scripts tests",
+    "release": "node scripts/dispatch-release.ts",
+    "release:check": "pnpm quality && node scripts/release-check.ts && node scripts/repository-controls.ts",
+    "repo:controls:apply": "node scripts/repository-controls.ts --apply",
+    "repo:controls:check": "node scripts/repository-controls.ts",
     "test": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.scripts.json",
     "quality": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm bundle:check"
   },
   "dependencies": {

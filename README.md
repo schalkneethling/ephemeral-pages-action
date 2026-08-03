@@ -93,7 +93,10 @@ pnpm quality
 
 `pnpm build` creates the checked-in `dist/index.js` bundle. `pnpm bundle:check` rebuilds and fails when the committed bundle differs. CI runs linting, formatting, type checking, unit tests, coverage, Node 24 bundle execution, and bundle verification.
 
-Release steps are documented in [docs/releasing.md](docs/releasing.md). No release is performed automatically by CI.
+The trusted release process is documented in [docs/releasing.md](docs/releasing.md). Maintainers use
+`pnpm release:check` and `pnpm release`; only the protected GitHub Actions release job can publish
+immutable version Releases or move the floating major tag. Repository controls are managed and
+audited with `pnpm repo:controls:check` and `pnpm repo:controls:apply`.
 
 ## License
 

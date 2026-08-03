@@ -1,0 +1,38 @@
+name: Roll back floating release tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-tag:
+        description: Existing immutable release tag, for example v1.0.0
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Move the floating major tag to a known-good immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_GUARD: ${{ vars.RELEASE_GUARD }}
+          ROLLBACK_TAG: ${{ inputs['target-tag'] }}
+        run: node scripts/rollback-release.ts

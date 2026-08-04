@@ -8,6 +8,8 @@ import { readBoundedJson, run } from "./lib/io.ts";
 import {
   codeQlDefaultSetupPayload,
   desiredRepositoryControls,
+  enablementRequestMethod,
+  findRulesetByName,
   mainRulesetPayload,
   normalizeCodeQlDefaultSetup,
   normalizeDependabotSecurityUpdates,
@@ -124,11 +126,8 @@ async function main(): Promise<void> {
       "GET",
       `repos/${repository}/code-scanning/default-setup`,
     );
-    const rulesets = api.request<Array<{ id: number; name: string }>>(
-      "GET",
-      `repos/${repository}/rulesets`,
-    );
-    const summary = rulesets.find((candidate) => candidate.name === desired.mainRuleset?.name);
+    const rulesets = api.paginated<{ id: number; name: string }>(`repos/${repository}/rulesets`);
+    const summary = findRulesetByName(rulesets, desired.mainRuleset.name);
     const ruleset = summary
       ? api.request<GitHubRuleset>("GET", `repos/${repository}/rulesets/${summary.id}`)
       : null;
@@ -208,9 +207,15 @@ async function main(): Promise<void> {
         can_approve_pull_request_reviews: desired.workflowPermissions.canApprovePullRequestReviews,
       });
     } else if (change.control === "dependabot-alerts") {
-      api.request("PUT", `repos/${repository}/vulnerability-alerts`);
+      api.request(
+        enablementRequestMethod(change.operation),
+        `repos/${repository}/vulnerability-alerts`,
+      );
     } else if (change.control === "dependabot-security-updates") {
-      api.request("PUT", `repos/${repository}/automated-security-fixes`);
+      api.request(
+        enablementRequestMethod(change.operation),
+        `repos/${repository}/automated-security-fixes`,
+      );
     } else if (change.control === "codeql-default-setup") {
       api.request(
         "PATCH",

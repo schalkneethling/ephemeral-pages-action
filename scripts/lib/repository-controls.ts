@@ -134,8 +134,16 @@ export type RepositoryControlChange = {
     | "codeql-default-setup"
     | "main-ruleset"
     | "release-environment";
-  operation: "enable" | "update" | "create" | "manual";
+  operation: "enable" | "disable" | "update" | "create" | "manual";
 };
+
+export function enablementRequestMethod(
+  operation: RepositoryControlChange["operation"],
+): "PUT" | "DELETE" {
+  if (operation === "enable") return "PUT";
+  if (operation === "disable") return "DELETE";
+  throw new Error(`Cannot apply ${operation} as an enablement request.`);
+}
 
 export function desiredRepositoryControls(options: {
   reviewerId: number;
@@ -218,14 +226,23 @@ export function planRepositoryControlChanges(
     changes.push({ control: "workflow-permissions", operation: "update" });
   }
   if (current.security.dependabotAlerts !== desired.security.dependabotAlerts) {
-    changes.push({ control: "dependabot-alerts", operation: "enable" });
+    changes.push({
+      control: "dependabot-alerts",
+      operation: desired.security.dependabotAlerts ? "enable" : "disable",
+    });
   }
   if (current.security.dependabotSecurityUpdatesPaused) {
-    changes.push({ control: "dependabot-security-updates", operation: "manual" });
+    changes.push({
+      control: "dependabot-security-updates",
+      operation: desired.security.dependabotSecurityUpdates ? "manual" : "disable",
+    });
   } else if (
     current.security.dependabotSecurityUpdates !== desired.security.dependabotSecurityUpdates
   ) {
-    changes.push({ control: "dependabot-security-updates", operation: "enable" });
+    changes.push({
+      control: "dependabot-security-updates",
+      operation: desired.security.dependabotSecurityUpdates ? "enable" : "disable",
+    });
   }
   if (!equal(current.security.codeQlDefaultSetup, desired.security.codeQlDefaultSetup)) {
     changes.push({ control: "codeql-default-setup", operation: "update" });
@@ -253,6 +270,13 @@ export function normalizeDependabotSecurityUpdates(
     dependabotSecurityUpdates: Boolean(updates?.enabled && !updates.paused),
     dependabotSecurityUpdatesPaused: Boolean(updates?.paused),
   };
+}
+
+export function findRulesetByName<T extends { name: string }>(
+  rulesets: T[],
+  name: string,
+): T | undefined {
+  return rulesets.find((ruleset) => ruleset.name === name);
 }
 
 export function normalizeRepositorySettings(

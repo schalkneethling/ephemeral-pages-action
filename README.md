@@ -96,7 +96,8 @@ pnpm quality
 The trusted release process is documented in [docs/releasing.md](docs/releasing.md). Maintainers use
 `pnpm release:check` and `pnpm release`; only the protected GitHub Actions release job can publish
 immutable version Releases or move the floating major tag. Repository controls are managed and
-audited with `pnpm repo:controls:check` and `pnpm repo:controls:apply`.
+audited with `pnpm repo:controls:check` and `pnpm repo:controls:apply`; see
+[Repository controls](docs/repository-controls.md) for the automated and manual control inventory.
 
 ## License
 

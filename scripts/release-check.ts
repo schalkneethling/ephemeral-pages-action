@@ -132,10 +132,12 @@ function main(): void {
   }
 
   const api = new GitHubApi();
-  const immutable = api.optional<{ enabled: boolean }>(
-    `repos/${controls.repository}/immutable-releases`,
-  );
-  if (!immutable?.enabled) throw new Error("Immutable GitHub Releases must be enabled.");
+  if (!ci) {
+    const immutable = api.optional<{ enabled: boolean }>(
+      `repos/${controls.repository}/immutable-releases`,
+    );
+    if (!immutable?.enabled) throw new Error("Immutable GitHub Releases must be enabled.");
+  }
 
   const evidence = verifyReleaseEvidence({
     repository: controls.repository,

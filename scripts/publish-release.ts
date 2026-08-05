@@ -83,9 +83,6 @@ function main(): void {
   }
 
   const api = new GitHubApi();
-  const immutable = api.optional<{ enabled: boolean }>(`repos/${repository}/immutable-releases`);
-  if (!immutable?.enabled) throw new Error("Immutable GitHub Releases must be enabled.");
-
   const releases = api.paginated<ReleaseResponse>(`repos/${repository}/releases`);
   const existingResponse = releases.find((release) => release.tag_name === version.releaseTag);
   const releaseTagSha = resolveGitRef(api, repository, `tags/${version.releaseTag}`);

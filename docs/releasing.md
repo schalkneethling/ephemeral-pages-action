@@ -81,6 +81,12 @@ production smoke test.
 dispatches `.github/workflows/release.yml`, and watches the run. GitHub repeats every authoritative
 check before the protected publish job waits for approval.
 
+The local check also verifies the repository's immutable-release setting with the maintainer's
+authenticated `gh` session. GitHub's workflow token cannot read that administration-only endpoint,
+so the workflow relies on the successful local preflight and then requires the published Release
+response itself to be immutable. Always dispatch through `pnpm release`; do not invoke the workflow
+directly from the Actions tab.
+
 To exercise the complete read-only path first:
 
 ```sh

@@ -17,13 +17,23 @@ const upload: UploadResponse = {
 };
 
 function octokit(comments: Array<Record<string, unknown>> = []) {
-  const createComment = vi.fn().mockResolvedValue({ data: { id: 100 } });
-  const updateComment = vi.fn().mockResolvedValue({ data: { id: 99 } });
-  const listComments = vi.fn();
-  const paginate = vi.fn().mockResolvedValue(comments);
+  const createComment = vi
+    .fn<(parameters: unknown) => Promise<{ data: { id: number } }>>()
+    .mockResolvedValue({ data: { id: 100 } });
+  const updateComment = vi
+    .fn<(parameters: unknown) => Promise<{ data: { id: number } }>>()
+    .mockResolvedValue({ data: { id: 99 } });
+  const listComments = vi.fn<(parameters: unknown) => Promise<unknown>>();
+  const paginate = vi
+    .fn<(method: unknown, parameters: unknown) => Promise<typeof comments>>()
+    .mockResolvedValue(comments);
   const client = {
     rest: {
-      users: { getAuthenticated: vi.fn().mockResolvedValue({ data: { login: "token-owner" } }) },
+      users: {
+        getAuthenticated: vi
+          .fn<() => Promise<{ data: { login: string } }>>()
+          .mockResolvedValue({ data: { login: "token-owner" } }),
+      },
       issues: { createComment, updateComment, listComments },
     },
     paginate,

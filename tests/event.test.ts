@@ -32,12 +32,15 @@ describe("validatePullRequestEvent", () => {
     expect(() => validatePullRequestEvent("pull_request", "owner/repo", fork)).toThrow(/Fork/);
   });
 
-  it.each(["pull_request_target", "push", "workflow_dispatch"])(
-    "rejects the %s event",
-    (eventName) => {
-      expect(() => validatePullRequestEvent(eventName, "owner/repo", payload())).toThrow();
-    },
-  );
+  it.each([
+    ["pull_request_target", /unsupported/],
+    ["push", /Only pull_request/],
+    ["workflow_dispatch", /Only pull_request/],
+  ])("rejects the %s event", (eventName, expectedError) => {
+    expect(() => validatePullRequestEvent(eventName, "owner/repo", payload())).toThrow(
+      expectedError,
+    );
+  });
 
   it("rejects a missing pull request", () => {
     expect(() =>

@@ -14,15 +14,34 @@ function baseDependencies(workspace: string): RunDependencies {
     "report-name": "Accessibility report",
     "service-url": "https://ephemeral.example",
   };
-  const setOutput = vi.fn();
+  const setOutput = vi.fn<RunDependencies["core"]["setOutput"]>();
+  const octokit = {
+    rest: {
+      users: {
+        getAuthenticated: vi
+          .fn<() => Promise<{ data: { login: string } }>>()
+          .mockResolvedValue({ data: { login: "token-owner" } }),
+      },
+      issues: {
+        listComments: vi.fn<(parameters: unknown) => Promise<unknown>>(),
+        createComment: vi
+          .fn<(parameters: unknown) => Promise<{ data: { id: number } }>>()
+          .mockResolvedValue({ data: { id: 88 } }),
+        updateComment: vi.fn<(parameters: unknown) => Promise<unknown>>(),
+      },
+    },
+    paginate: vi
+      .fn<(method: unknown, parameters: unknown) => Promise<unknown[]>>()
+      .mockResolvedValue([]),
+  } as unknown as ReturnType<RunDependencies["getOctokit"]>;
   return {
     core: {
-      getInput: vi.fn((name: string) => inputs[name] ?? ""),
-      getIDToken: vi.fn().mockResolvedValue("oidc-secret"),
-      setSecret: vi.fn(),
+      getInput: vi.fn<RunDependencies["core"]["getInput"]>((name: string) => inputs[name] ?? ""),
+      getIDToken: vi.fn<RunDependencies["core"]["getIDToken"]>().mockResolvedValue("oidc-secret"),
+      setSecret: vi.fn<RunDependencies["core"]["setSecret"]>(),
       setOutput,
-      warning: vi.fn(),
-      info: vi.fn(),
+      warning: vi.fn<RunDependencies["core"]["warning"]>(),
+      info: vi.fn<RunDependencies["core"]["info"]>(),
     },
     context: {
       eventName: "pull_request",
@@ -36,18 +55,8 @@ function baseDependencies(workspace: string): RunDependencies {
         },
       },
     } as unknown as RunDependencies["context"],
-    getOctokit: vi.fn(() => ({
-      rest: {
-        users: { getAuthenticated: vi.fn().mockResolvedValue({ data: { login: "token-owner" } }) },
-        issues: {
-          listComments: vi.fn(),
-          createComment: vi.fn().mockResolvedValue({ data: { id: 88 } }),
-          updateComment: vi.fn(),
-        },
-      },
-      paginate: vi.fn().mockResolvedValue([]),
-    })) as unknown as RunDependencies["getOctokit"],
-    fetch: vi.fn().mockResolvedValue(
+    getOctokit: vi.fn<RunDependencies["getOctokit"]>(() => octokit),
+    fetch: vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
         JSON.stringify({
           id: "page",
@@ -58,7 +67,7 @@ function baseDependencies(workspace: string): RunDependencies {
         { status: 201 },
       ),
     ),
-    sleep: vi.fn(),
+    sleep: vi.fn<(milliseconds: number) => Promise<void>>().mockResolvedValue(undefined),
     random: () => 0.5,
     environment: {
       GITHUB_WORKSPACE: workspace,
@@ -98,9 +107,9 @@ describe("run", () => {
       "<html><head></head><body>Report</body></html>",
     );
     const dependencies = baseDependencies(workspace);
-    dependencies.getOctokit = vi.fn(() => {
+    dependencies.getOctokit = vi.fn<RunDependencies["getOctokit"]>(() => {
       throw new Error("github-secret");
-    }) as RunDependencies["getOctokit"];
+    });
 
     await expect(run(dependencies)).rejects.toThrow(/comment/);
     expect(dependencies.core.setOutput).toHaveBeenCalledWith("page-id", "page");

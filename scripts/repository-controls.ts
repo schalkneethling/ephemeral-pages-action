@@ -47,7 +47,7 @@ interface EnvironmentVariablesResponse {
   variables: Array<{ name: string; value: string }>;
 }
 
-const CODEQL_VERIFICATION_ATTEMPTS = 12;
+const CODEQL_VERIFICATION_ATTEMPTS = 36;
 const CODEQL_VERIFICATION_DELAY_MS = 5_000;
 
 const root = fileURLToPath(new URL("..", import.meta.url));

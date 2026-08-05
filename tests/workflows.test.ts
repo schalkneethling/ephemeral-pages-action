@@ -33,6 +33,8 @@ describe("trusted workflow acceptance criteria", () => {
     expect(release).toContain("environment: release");
     expect(release.match(/contents: write/g)).toHaveLength(1);
     expect(release).toContain("RELEASE_GUARD: ${{ vars.RELEASE_GUARD }}");
+    expect(release).toContain("RELEASE_PREFLIGHT_CONTEXT: ${{ inputs['preflight-context'] }}");
+    expect(release).toContain("statuses: read");
     expect(release).toContain("cancel-in-progress: false");
     expect(release.match(/timeout-minutes: 20/g)).toHaveLength(2);
   });
@@ -48,9 +50,16 @@ describe("trusted workflow acceptance criteria", () => {
   it("does not require the admin-only immutable-release settings endpoint during publication", () => {
     const releaseCheck = script("release-check.ts");
     const publisher = script("publish-release.ts");
-    expect(releaseCheck).toMatch(/if \(!ci\) \{[\s\S]*?immutable-releases/);
+    const nonCiBranch = releaseCheck.match(
+      /\} else \{\n([\s\S]*?)\n  \}\n\n  const evidence = verifyReleaseEvidence/,
+    )?.[1];
+    expect(nonCiBranch).toContain("/immutable-releases");
+    expect(nonCiBranch).toContain("if (!immutable?.enabled)");
     expect(publisher).not.toContain("/immutable-releases");
-    expect(publisher).toContain("release.draft || !release.immutable");
+    const publication = publisher.indexOf('api.request<ReleaseResponse>("PATCH"');
+    const immutableAssertion = publisher.indexOf("release.draft || !release.immutable");
+    expect(publication).toBeGreaterThan(-1);
+    expect(immutableAssertion).toBeGreaterThan(publication);
   });
 
   it("never introduces pull_request_target", () => {

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   PUBLISH_CHECK_NAME,
   QUALITY_CHECK_NAME,
+  RELEASE_PREFLIGHT_CONTEXT_PREFIX,
+  RELEASE_PREFLIGHT_DESCRIPTION,
   assertReleaseSource,
   compareStableVersions,
   planReleasePublication,
@@ -9,6 +11,7 @@ import {
   parseStableVersion,
   planMajorRollback,
   verifyReleaseEvidence,
+  verifyReleasePreflight,
 } from "../scripts/lib/release.js";
 
 describe("release acceptance criteria", () => {
@@ -271,6 +274,51 @@ describe("release evidence", () => {
         pullRequests: [{ ...validEvidence.pullRequests[0]!, checks: [] }],
       }),
     ).toThrow(/production smoke/);
+  });
+});
+
+describe("release preflight attestation", () => {
+  const now = Date.parse("2026-08-05T20:30:00.000Z");
+  const sha = "0123456789abcdef";
+  const context = `${RELEASE_PREFLIGHT_CONTEXT_PREFIX}${"a".repeat(64)}`;
+  const status = {
+    context,
+    state: "success",
+    description: RELEASE_PREFLIGHT_DESCRIPTION,
+    sha,
+    creator: "release-owner",
+    createdAt: "2026-08-05T20:29:00.000Z",
+  };
+
+  it("accepts a recent SHA-bound attestation from the release reviewer", () => {
+    expect(context.length).toBeLessThanOrEqual(100);
+    expect(() =>
+      verifyReleasePreflight([status], context, sha, "RELEASE-OWNER", now),
+    ).not.toThrow();
+  });
+
+  it("rejects missing, stale, or untrusted attestations", () => {
+    expect(() => verifyReleasePreflight([], context, sha, "release-owner", now)).toThrow(
+      /attestation/,
+    );
+    expect(() =>
+      verifyReleasePreflight(
+        [{ ...status, createdAt: "2026-08-05T20:00:00.000Z" }],
+        context,
+        sha,
+        "release-owner",
+        now,
+      ),
+    ).toThrow(/attestation/);
+    expect(() => verifyReleasePreflight([status], context, sha, "different-owner", now)).toThrow(
+      /attestation/,
+    );
+  });
+
+  it("rejects a caller-controlled context without a matching GitHub status", () => {
+    expect(() =>
+      verifyReleasePreflight([status], "untrusted-input", sha, "release-owner", now),
+    ).toThrow(/context/);
   });
 });
 

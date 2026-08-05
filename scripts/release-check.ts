@@ -3,8 +3,13 @@
 import { fileURLToPath } from "node:url";
 import { GitHubApi, MAX_GITHUB_API_PAGES } from "./lib/github.ts";
 import { readBoundedJson, run } from "./lib/io.ts";
-import { assertReleaseSource, parseStableVersion, verifyReleaseEvidence } from "./lib/release.ts";
-import type { CheckEvidence, PullRequestEvidence } from "./lib/release.ts";
+import {
+  assertReleaseSource,
+  parseStableVersion,
+  verifyReleaseEvidence,
+  verifyReleasePreflight,
+} from "./lib/release.ts";
+import type { CheckEvidence, PullRequestEvidence, ReleasePreflightStatus } from "./lib/release.ts";
 
 interface PackageManifest {
   version: string;
@@ -13,6 +18,16 @@ interface PackageManifest {
 
 interface ControlsConfig {
   repository: string;
+  releaseReviewer: string;
+}
+
+interface CommitStatusResponse {
+  context: string;
+  state: string;
+  description: string | null;
+  sha: string;
+  creator: { login: string } | null;
+  created_at: string;
 }
 
 interface CheckRunsResponse {
@@ -132,7 +147,23 @@ function main(): void {
   }
 
   const api = new GitHubApi();
-  if (!ci) {
+  if (ci) {
+    const preflightContext = process.env.RELEASE_PREFLIGHT_CONTEXT;
+    if (!preflightContext) throw new Error("RELEASE_PREFLIGHT_CONTEXT must be provided.");
+    const statuses = api
+      .paginated<CommitStatusResponse>(`repos/${controls.repository}/commits/${headSha}/statuses`)
+      .map(
+        (status): ReleasePreflightStatus => ({
+          context: status.context,
+          state: status.state,
+          description: status.description,
+          sha: status.sha,
+          creator: status.creator?.login ?? null,
+          createdAt: status.created_at,
+        }),
+      );
+    verifyReleasePreflight(statuses, preflightContext, headSha, controls.releaseReviewer);
+  } else {
     const immutable = api.optional<{ enabled: boolean }>(
       `repos/${controls.repository}/immutable-releases`,
     );

@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 
+import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
+import { GitHubApi } from "./lib/github.ts";
 import { readBoundedJson, run, runInteractive } from "./lib/io.ts";
-import { parseStableVersion } from "./lib/release.ts";
+import {
+  RELEASE_PREFLIGHT_CONTEXT_PREFIX,
+  RELEASE_PREFLIGHT_DESCRIPTION,
+  parseStableVersion,
+} from "./lib/release.ts";
 
 interface PackageManifest {
   version: string;
+}
+
+interface ControlsConfig {
+  repository: string;
 }
 
 interface WorkflowRun {
@@ -67,6 +77,7 @@ async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
   const yes = process.argv.includes("--yes");
   const manifest = readBoundedJson<PackageManifest>(`${root}/package.json`);
+  const controls = readBoundedJson<ControlsConfig>(`${root}/.github/repository-controls.json`);
   const version = parseStableVersion(manifest.version);
 
   runInteractive("pnpm", ["release:check"], root);
@@ -74,6 +85,13 @@ async function main(): Promise<void> {
   if (!dryRun && !yes && !(await confirmRelease(version.releaseTag, sha))) {
     throw new Error("Release dispatch cancelled.");
   }
+
+  const preflightContext = `${RELEASE_PREFLIGHT_CONTEXT_PREFIX}${randomBytes(32).toString("hex")}`;
+  new GitHubApi().request("POST", `repos/${controls.repository}/statuses/${sha}`, {
+    state: "success",
+    context: preflightContext,
+    description: RELEASE_PREFLIGHT_DESCRIPTION,
+  });
 
   const startedAt = Date.now();
   run(
@@ -86,6 +104,8 @@ async function main(): Promise<void> {
       "main",
       "-f",
       `expected-sha=${sha}`,
+      "-f",
+      `preflight-context=${preflightContext}`,
       "-f",
       `dry-run=${String(dryRun)}`,
     ],

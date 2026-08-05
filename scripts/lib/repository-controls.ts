@@ -330,7 +330,7 @@ export function normalizeCodeQlDefaultSetup(
     querySuite: setup.query_suite,
     threatModel: setup.threat_model,
     runnerType: setup.runner_type,
-    runnerLabel: setup.runner_label,
+    runnerLabel: setup.runner_label || null,
   };
 }
 

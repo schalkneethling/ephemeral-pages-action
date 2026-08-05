@@ -165,6 +165,7 @@ describe("repository control acceptance criteria", () => {
       normalizeCodeQlDefaultSetup({
         ...codeQlDefaultSetupPayload(desired.security.codeQlDefaultSetup),
         languages: ["actions", "javascript", "javascript-typescript", "typescript"],
+        runner_label: "",
       }),
     ).toEqual(desired.security.codeQlDefaultSetup);
   });

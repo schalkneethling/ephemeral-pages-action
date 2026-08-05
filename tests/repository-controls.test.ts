@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   codeQlDefaultSetupPayload,
   desiredRepositoryControls,
+  enablementRequestMethod,
+  findRulesetByName,
   mainRulesetPayload,
   normalizeCodeQlDefaultSetup,
   normalizeDependabotSecurityUpdates,
@@ -107,6 +109,49 @@ describe("repository control acceptance criteria", () => {
     expect(planRepositoryControlChanges(current, desired)).toEqual([
       { control: "dependabot-security-updates", operation: "manual" },
     ]);
+  });
+
+  it("plans Dependabot disable operations", () => {
+    const target = matchingState();
+    target.security.dependabotAlerts = false;
+    target.security.dependabotSecurityUpdates = false;
+
+    const changes = planRepositoryControlChanges(matchingState(), target);
+    expect(changes).toEqual([
+      { control: "dependabot-alerts", operation: "disable" },
+      { control: "dependabot-security-updates", operation: "disable" },
+    ]);
+  });
+
+  it("maps enablement operations to their GitHub API methods", () => {
+    expect(enablementRequestMethod("enable")).toBe("PUT");
+    expect(enablementRequestMethod("disable")).toBe("DELETE");
+    expect(() => enablementRequestMethod("manual")).toThrow(/cannot apply manual/i);
+  });
+
+  it("disables paused Dependabot security updates when they are not desired", () => {
+    const current = matchingState();
+    const target = matchingState();
+    Object.assign(
+      current.security,
+      normalizeDependabotSecurityUpdates({ enabled: true, paused: true }),
+    );
+    target.security.dependabotSecurityUpdates = false;
+
+    expect(planRepositoryControlChanges(current, target)).toEqual([
+      { control: "dependabot-security-updates", operation: "disable" },
+    ]);
+  });
+
+  it("finds a named ruleset beyond the first API page", () => {
+    const rulesets = Array.from({ length: 101 }, (_, index) => ({
+      id: index,
+      name: index === 100 ? desired.mainRuleset.name : `ruleset-${index}`,
+    }));
+    expect(findRulesetByName(rulesets, desired.mainRuleset.name)).toEqual({
+      id: 100,
+      name: desired.mainRuleset.name,
+    });
   });
 
   it("round-trips repository settings through the GitHub API shape", () => {

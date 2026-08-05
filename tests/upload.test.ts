@@ -27,13 +27,13 @@ function dependencies(
 ): UploadDependencies {
   return {
     fetch: fetchMock,
-    getIdToken: vi.fn(async () => {
+    getIdToken: vi.fn<(audience: string) => Promise<string>>(async () => {
       if (token instanceof Error) throw token;
       return token;
     }),
-    setSecret: vi.fn(),
-    sleep: vi.fn(async () => undefined),
-    warn: vi.fn(),
+    setSecret: vi.fn<(secret: string) => void>(),
+    sleep: vi.fn<(milliseconds: number) => Promise<void>>(async () => undefined),
+    warn: vi.fn<(message: string) => void>(),
     random: () => 0.5,
   };
 }

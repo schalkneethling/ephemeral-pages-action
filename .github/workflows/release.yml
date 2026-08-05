@@ -7,6 +7,10 @@ on:
         description: Exact main commit that was checked locally
         required: true
         type: string
+      preflight-context:
+        description: GitHub-backed attestation created by pnpm release:check
+        required: true
+        type: string
       dry-run:
         description: Verify the release without creating or moving refs
         required: true
@@ -28,6 +32,7 @@ jobs:
       checks: read
       contents: read
       pull-requests: read
+      statuses: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -50,6 +55,7 @@ jobs:
       - name: Verify release source and evidence
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_PREFLIGHT_CONTEXT: ${{ inputs['preflight-context'] }}
           RELEASE_SHA: ${{ inputs['expected-sha'] }}
         run: node scripts/release-check.ts --ci
 

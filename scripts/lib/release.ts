@@ -59,6 +59,15 @@ export interface ReleaseEvidence {
   pullRequests: PullRequestEvidence[];
 }
 
+export interface ReleasePreflightStatus {
+  context: string;
+  state: string;
+  description: string | null;
+  sha: string;
+  creator: string | null;
+  createdAt: string;
+}
+
 export interface MajorRollbackState {
   targetVersion: string;
   targetSha: string | null;
@@ -70,6 +79,9 @@ export interface MajorRollbackState {
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 export const QUALITY_CHECK_NAME = "quality";
 export const PUBLISH_CHECK_NAME = "publish";
+export const RELEASE_PREFLIGHT_CONTEXT_PREFIX = "ephemeral-pages-action/preflight/";
+export const RELEASE_PREFLIGHT_DESCRIPTION = "pnpm release:check passed";
+const RELEASE_PREFLIGHT_MAX_AGE_MS = 15 * 60 * 1000;
 
 export function parseStableVersion(version: string): StableVersion {
   const match = STABLE_VERSION.exec(version);
@@ -108,6 +120,35 @@ export function assertReleaseSource(source: ReleaseSource): void {
     throw new Error("Releases must be dispatched from the main branch.");
   if (source.headSha !== source.remoteMainSha) {
     throw new Error("The local release commit must exactly match origin/main.");
+  }
+}
+
+export function verifyReleasePreflight(
+  statuses: ReleasePreflightStatus[],
+  expectedContext: string,
+  expectedSha: string,
+  expectedReviewer: string,
+  now = Date.now(),
+): void {
+  const contextPattern = new RegExp(`^${RELEASE_PREFLIGHT_CONTEXT_PREFIX}[a-f0-9]{64}$`);
+  if (!contextPattern.test(expectedContext)) {
+    throw new Error("The release preflight attestation context is invalid.");
+  }
+  const status = statuses.find((candidate) => candidate.context === expectedContext);
+  const createdAt = status ? Date.parse(status.createdAt) : Number.NaN;
+  if (
+    !status ||
+    status.state !== "success" ||
+    status.description !== RELEASE_PREFLIGHT_DESCRIPTION ||
+    status.sha !== expectedSha ||
+    status.creator?.toLowerCase() !== expectedReviewer.toLowerCase() ||
+    !Number.isFinite(createdAt) ||
+    createdAt > now + 60_000 ||
+    now - createdAt > RELEASE_PREFLIGHT_MAX_AGE_MS
+  ) {
+    throw new Error(
+      "A recent successful pnpm release:check attestation from the release reviewer is required.",
+    );
   }
 }
 

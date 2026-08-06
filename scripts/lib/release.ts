@@ -180,14 +180,13 @@ export function normalizeReleasePreflightEvidence(value: unknown): ReleasePrefli
   if (!Array.isArray(response.statuses)) {
     invalidPreflightEvidence("statuses");
   }
-  if (
-    !Number.isSafeInteger(response.total_count) ||
-    (response.total_count as number) < 0 ||
-    (response.total_count as number) > 100
-  ) {
+  if (!Number.isSafeInteger(response.total_count) || (response.total_count as number) < 0) {
     invalidPreflightEvidence("total_count");
   }
-  if (response.total_count !== response.statuses.length) {
+  if (response.statuses.length > 100) {
+    invalidPreflightEvidence("statuses");
+  }
+  if ((response.total_count as number) < response.statuses.length) {
     invalidPreflightEvidence("statuses count");
   }
   const statuses = response.statuses.map((value, index): ReleasePreflightStatus => {

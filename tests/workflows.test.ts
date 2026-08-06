@@ -38,6 +38,12 @@ describe("trusted workflow acceptance criteria", () => {
     expect(release).toContain("statuses: read");
     expect(release).toContain("cancel-in-progress: false");
     expect(release.match(/timeout-minutes: 20/g)).toHaveLength(2);
+    const exactCheckout = release.indexOf("ref: ${{ inputs['expected-sha'] }}");
+    const quality = release.indexOf("- run: pnpm quality");
+    const evidence = release.indexOf("node scripts/release-check.ts --ci");
+    expect(exactCheckout).toBeGreaterThan(-1);
+    expect(quality).toBeGreaterThan(exactCheckout);
+    expect(evidence).toBeGreaterThan(quality);
   });
 
   it("gates rollback through the release environment and guard", () => {
@@ -57,6 +63,7 @@ describe("trusted workflow acceptance criteria", () => {
     expect(nonCiBranch).toContain("/immutable-releases");
     expect(nonCiBranch).toContain("if (!immutable?.enabled)");
     expect(releaseCheck).toContain("commits/${headSha}/status?per_page=100");
+    expect(releaseCheck).not.toContain("mainChecks: checks");
     expect(publisher).not.toContain("/immutable-releases");
     const publication = publisher.indexOf('api.request<ReleaseResponse>("PATCH"');
     const immutableAssertion = publisher.indexOf("release.draft || !release.immutable");

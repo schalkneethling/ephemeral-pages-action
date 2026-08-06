@@ -1,0 +1,12 @@
+{
+  "total_count": 1,
+  "check_runs": [
+    {
+      "id": 92575205463,
+      "name": "publish",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/owner/repo/actions/runs/1/job/2"
+    }
+  ]
+}

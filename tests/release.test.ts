@@ -1,11 +1,12 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   PUBLISH_CHECK_NAME,
-  QUALITY_CHECK_NAME,
   RELEASE_PREFLIGHT_CONTEXT_PREFIX,
   RELEASE_PREFLIGHT_DESCRIPTION,
   assertReleaseSource,
   compareStableVersions,
+  normalizeCheckRunsPage,
   normalizeReleasePreflightEvidence,
   planReleasePublication,
   publicationOperations,
@@ -14,6 +15,9 @@ import {
   verifyReleaseEvidence,
   verifyReleasePreflight,
 } from "../scripts/lib/release.js";
+import { readBoundedJson } from "../scripts/lib/io.js";
+
+const fixtureDirectory = path.resolve("tests/fixtures/github");
 
 describe("release acceptance criteria", () => {
   it("derives immutable and floating tags from the package version", () => {
@@ -224,7 +228,6 @@ describe("release evidence", () => {
   const validEvidence = {
     repository: "owner/repo",
     sourceTreeSha: "tree-1",
-    mainChecks: [{ name: QUALITY_CHECK_NAME, conclusion: "success" }],
     pullRequests: [
       {
         number: 7,
@@ -236,7 +239,7 @@ describe("release evidence", () => {
     ],
   };
 
-  it("accepts a main commit whose exact tree passed CI and same-repository production smoke", () => {
+  it("accepts a main commit whose exact pull-request tree passed production smoke", () => {
     expect(verifyReleaseEvidence(validEvidence)).toEqual({ pullRequestNumber: 7 });
   });
 
@@ -247,10 +250,6 @@ describe("release evidence", () => {
         pullRequests: [{ ...validEvidence.pullRequests[0]!, headRepository: "OWNER/REPO" }],
       }),
     ).toEqual({ pullRequestNumber: 7 });
-  });
-
-  it("rejects missing post-merge quality evidence", () => {
-    expect(() => verifyReleaseEvidence({ ...validEvidence, mainChecks: [] })).toThrow(/quality/);
   });
 
   it("rejects fork smoke evidence and tree mismatches", () => {
@@ -268,13 +267,35 @@ describe("release evidence", () => {
     ).toThrow(/exact release tree/);
   });
 
-  it("rejects a missing or unsuccessful production smoke check", () => {
+  it("distinguishes missing, pending, and unsuccessful production smoke evidence", () => {
     expect(() =>
       verifyReleaseEvidence({
         ...validEvidence,
         pullRequests: [{ ...validEvidence.pullRequests[0]!, checks: [] }],
       }),
-    ).toThrow(/production smoke/);
+    ).toThrow(/does not have a production smoke check/);
+    expect(() =>
+      verifyReleaseEvidence({
+        ...validEvidence,
+        pullRequests: [
+          {
+            ...validEvidence.pullRequests[0]!,
+            checks: [{ name: PUBLISH_CHECK_NAME, conclusion: null }],
+          },
+        ],
+      }),
+    ).toThrow(/still pending/);
+    expect(() =>
+      verifyReleaseEvidence({
+        ...validEvidence,
+        pullRequests: [
+          {
+            ...validEvidence.pullRequests[0]!,
+            checks: [{ name: PUBLISH_CHECK_NAME, conclusion: "failure" }],
+          },
+        ],
+      }),
+    ).toThrow(/did not succeed/);
   });
 });
 
@@ -371,14 +392,12 @@ describe("release preflight attestation", () => {
 });
 
 describe("release preflight response validation", () => {
-  const rawStatus = {
-    context: `${RELEASE_PREFLIGHT_CONTEXT_PREFIX}${"a".repeat(64)}`,
-    state: "success",
-    description: RELEASE_PREFLIGHT_DESCRIPTION,
-    creator: null,
-    created_at: "2026-08-05T20:29:00.000Z",
-  };
-  const response = { sha: "0".repeat(40), total_count: 1, statuses: [rawStatus] };
+  const response = readBoundedJson<{
+    sha: string;
+    total_count: number;
+    statuses: Array<Record<string, unknown>>;
+  }>(path.join(fixtureDirectory, "combined-status.json"), 64 * 1024);
+  const rawStatus = response.statuses[0]!;
 
   it("normalizes the production combined-status response", () => {
     expect(normalizeReleasePreflightEvidence(response)).toEqual({
@@ -389,7 +408,7 @@ describe("release preflight response validation", () => {
           state: "success",
           description: RELEASE_PREFLIGHT_DESCRIPTION,
           creator: null,
-          createdAt: "2026-08-05T20:29:00.000Z",
+          createdAt: rawStatus.created_at,
         },
       ],
     });
@@ -421,6 +440,36 @@ describe("release preflight response validation", () => {
     { ...response, statuses: [{ ...rawStatus, created_at: "invalid" }] },
   ])("rejects malformed GitHub evidence %#", (value) => {
     expect(() => normalizeReleasePreflightEvidence(value)).toThrow(/invalid.*evidence/i);
+  });
+});
+
+describe("check-runs response validation", () => {
+  const response = readBoundedJson<unknown>(
+    path.join(fixtureDirectory, "check-runs-page.json"),
+    64 * 1024,
+  );
+
+  it("normalizes a captured GitHub check-runs page", () => {
+    expect(normalizeCheckRunsPage(response)).toEqual({
+      totalCount: 1,
+      checkRuns: [{ name: "publish", conclusion: "success" }],
+    });
+  });
+
+  it.each([
+    null,
+    [],
+    {},
+    { total_count: -1, check_runs: [] },
+    { total_count: 1.5, check_runs: [] },
+    { total_count: 1, check_runs: {} },
+    { total_count: 0, check_runs: [{ name: "publish", conclusion: "success" }] },
+    { total_count: 101, check_runs: Array.from({ length: 101 }, () => ({ name: "publish" })) },
+    { total_count: 1, check_runs: [{}] },
+    { total_count: 1, check_runs: [{ name: "", conclusion: "success" }] },
+    { total_count: 1, check_runs: [{ name: "publish", conclusion: 1 }] },
+  ])("rejects malformed check-runs evidence %#", (value) => {
+    expect(() => normalizeCheckRunsPage(value)).toThrow(/invalid check-runs response/i);
   });
 });
 

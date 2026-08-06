@@ -5,6 +5,7 @@ import { GitHubApi, MAX_GITHUB_API_PAGES } from "./lib/github.ts";
 import { readBoundedJson, run } from "./lib/io.ts";
 import {
   assertReleaseSource,
+  normalizeCheckRunsPage,
   normalizeReleasePreflightEvidence,
   parseStableVersion,
   verifyReleaseEvidence,
@@ -22,11 +23,6 @@ interface ControlsConfig {
   releaseReviewer: string;
 }
 
-interface CheckRunsResponse {
-  total_count: number;
-  check_runs: Array<{ name: string; conclusion: string | null }>;
-}
-
 interface PullRequestResponse {
   number: number;
   merged_at: string | null;
@@ -36,27 +32,24 @@ interface PullRequestResponse {
 const root = fileURLToPath(new URL("..", import.meta.url));
 
 function checks(api: GitHubApi, repository: string, sha: string): CheckEvidence[] {
-  const checkRuns: CheckRunsResponse["check_runs"] = [];
+  const checkRuns: CheckEvidence[] = [];
   let totalCount: number | null = null;
   for (let page = 1; page <= MAX_GITHUB_API_PAGES; page += 1) {
-    const response = api.request<CheckRunsResponse>(
-      "GET",
-      `repos/${repository}/commits/${sha}/check-runs?per_page=100&page=${page}`,
+    const response = normalizeCheckRunsPage(
+      api.request<unknown>(
+        "GET",
+        `repos/${repository}/commits/${sha}/check-runs?filter=latest&per_page=100&page=${page}`,
+      ),
     );
-    if (
-      !response ||
-      !Number.isInteger(response.total_count) ||
-      response.total_count < 0 ||
-      !Array.isArray(response.check_runs)
-    ) {
+    if (totalCount !== null && response.totalCount !== totalCount) {
       throw new Error("GitHub check-runs response was invalid.");
     }
-    totalCount ??= response.total_count;
-    checkRuns.push(...response.check_runs);
+    totalCount ??= response.totalCount;
+    checkRuns.push(...response.checkRuns);
     if (checkRuns.length >= totalCount) {
-      return checkRuns.slice(0, totalCount).map(({ name, conclusion }) => ({ name, conclusion }));
+      return checkRuns.slice(0, totalCount);
     }
-    if (response.check_runs.length === 0) break;
+    if (response.checkRuns.length === 0) break;
   }
   throw new Error(
     `GitHub check runs exceeded the ${MAX_GITHUB_API_PAGES}-page safety limit or were incomplete.`,
@@ -167,7 +160,6 @@ function main(): void {
   const evidence = verifyReleaseEvidence({
     repository: controls.repository,
     sourceTreeSha: treeSha(api, controls.repository, headSha),
-    mainChecks: checks(api, controls.repository, headSha),
     pullRequests: collectPullRequestEvidence(api, controls.repository, headSha),
   });
 

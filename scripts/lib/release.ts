@@ -55,8 +55,12 @@ export interface PullRequestEvidence {
 export interface ReleaseEvidence {
   repository: string;
   sourceTreeSha: string;
-  mainChecks: CheckEvidence[];
   pullRequests: PullRequestEvidence[];
+}
+
+export interface CheckRunsPage {
+  totalCount: number;
+  checkRuns: CheckEvidence[];
 }
 
 export interface ReleasePreflightStatus {
@@ -81,7 +85,6 @@ export interface MajorRollbackState {
 }
 
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-export const QUALITY_CHECK_NAME = "quality";
 export const PUBLISH_CHECK_NAME = "publish";
 export const RELEASE_PREFLIGHT_CONTEXT_PREFIX = "ephemeral-pages-action/preflight/";
 export const RELEASE_PREFLIGHT_DESCRIPTION = "pnpm release:check passed";
@@ -214,6 +217,37 @@ export function normalizeReleasePreflightEvidence(value: unknown): ReleasePrefli
   return { sha: response.sha, statuses };
 }
 
+export function normalizeCheckRunsPage(value: unknown): CheckRunsPage {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("GitHub returned an invalid check-runs response.");
+  }
+  const response = value as Record<string, unknown>;
+  if (
+    !Number.isSafeInteger(response.total_count) ||
+    (response.total_count as number) < 0 ||
+    !Array.isArray(response.check_runs) ||
+    response.check_runs.length > 100 ||
+    response.check_runs.length > (response.total_count as number)
+  ) {
+    throw new Error("GitHub returned an invalid check-runs response.");
+  }
+  const checkRuns = response.check_runs.map((value): CheckEvidence => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("GitHub returned an invalid check-runs response.");
+    }
+    const checkRun = value as Record<string, unknown>;
+    if (
+      typeof checkRun.name !== "string" ||
+      !checkRun.name ||
+      (checkRun.conclusion !== null && typeof checkRun.conclusion !== "string")
+    ) {
+      throw new Error("GitHub returned an invalid check-runs response.");
+    }
+    return { name: checkRun.name, conclusion: checkRun.conclusion };
+  });
+  return { totalCount: response.total_count as number, checkRuns };
+}
+
 export function planReleasePublication(state: PublicationState): PublicationPlan {
   const version = parseStableVersion(state.version);
 
@@ -279,10 +313,6 @@ function sameRepository(left: string, right: string): boolean {
 }
 
 export function verifyReleaseEvidence(evidence: ReleaseEvidence): { pullRequestNumber: number } {
-  if (!passed(evidence.mainChecks, QUALITY_CHECK_NAME)) {
-    throw new Error("The exact main commit does not have a successful quality check.");
-  }
-
   const merged = evidence.pullRequests.filter((pullRequest) => pullRequest.merged);
   const sameRepositoryPullRequests = merged.filter((pullRequest) =>
     sameRepository(pullRequest.headRepository, evidence.repository),
@@ -302,7 +332,16 @@ export function verifyReleaseEvidence(evidence: ReleaseEvidence): { pullRequestN
     passed(pullRequest.checks, PUBLISH_CHECK_NAME),
   );
   if (!smokeTested) {
-    throw new Error("The exact release tree does not have a successful production smoke check.");
+    const smokeChecks = exactTree.flatMap((pullRequest) =>
+      pullRequest.checks.filter((check) => check.name === PUBLISH_CHECK_NAME),
+    );
+    if (smokeChecks.some((check) => check.conclusion === null)) {
+      throw new Error("The production smoke check for the exact release tree is still pending.");
+    }
+    if (smokeChecks.length > 0) {
+      throw new Error("The production smoke check for the exact release tree did not succeed.");
+    }
+    throw new Error("The exact release tree does not have a production smoke check.");
   }
 
   return { pullRequestNumber: smokeTested.number };

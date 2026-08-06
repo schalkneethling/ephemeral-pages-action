@@ -64,6 +64,22 @@ Commit `package.json` and `pnpm-lock.yaml`, open the pull request, and require:
 
 Merge the pull request. Do not release from an unreviewed commit or directly pushed commit.
 
+## Supported release contract
+
+The project supports one release path. The configured release reviewer runs `pnpm release` from a
+clean local `main` that exactly matches `origin/main`. The release commit must come from a merged
+same-repository pull request whose exact tree passed the production `publish` smoke test.
+
+The local command validates quality and repository controls before recording a short-lived,
+SHA-bound preflight attestation. GitHub then checks out that exact SHA, reruns `pnpm quality`,
+verifies the reviewer, attestation, merged pull request, and smoke evidence, and gates publication
+through the protected `release` environment.
+
+The ordinary `quality` jobs on pull requests and pushes to `main` remain required repository health
+controls. Release authorization does not query those asynchronous check results because the exact
+release SHA is tested again inside the release workflow. Direct workflow dispatches, releases from
+forks, and releases from unmerged or directly pushed commits are unsupported and rejected.
+
 ## Validate and release
 
 Return to a clean, synchronized `main` branch:
@@ -74,12 +90,13 @@ pnpm release
 ```
 
 `release:check` runs all quality gates, confirms the committed bundle is current, checks repository
-control drift, and verifies that the exact release tree passed post-merge CI and the same-repository
-production smoke test.
+control drift, and verifies that the exact release tree came from a merged same-repository pull
+request with a successful production smoke test.
 
 `release` repeats the checks, displays the package version and exact commit, requests confirmation,
-dispatches `.github/workflows/release.yml`, and watches the run. GitHub repeats every authoritative
-check before the protected publish job waits for approval.
+dispatches `.github/workflows/release.yml`, and watches the run. GitHub reruns quality against that
+exact commit and verifies every release-specific evidence check before the protected publish job
+waits for approval.
 
 The local check also verifies the repository's immutable-release setting with the maintainer's
 authenticated `gh` session. After it succeeds, the dispatcher records a unique commit status on the

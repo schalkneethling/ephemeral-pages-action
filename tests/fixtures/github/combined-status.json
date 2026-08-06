@@ -6,7 +6,6 @@
       "context": "ephemeral-pages-action/preflight/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "state": "success",
       "description": "pnpm release:check passed",
-      "creator": null,
       "created_at": "2026-08-06T09:12:58Z"
     }
   ]

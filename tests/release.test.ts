@@ -7,6 +7,7 @@ import {
   assertReleaseSource,
   compareStableVersions,
   normalizeCheckRunsPage,
+  normalizeGitHubUser,
   normalizeReleasePreflightEvidence,
   planReleasePublication,
   publicationOperations,
@@ -422,6 +423,23 @@ describe("release preflight response validation", () => {
     expect(evidence.statuses[0]?.creator).toBe("release-owner");
   });
 
+  it("normalizes an explicit null status creator", () => {
+    const evidence = normalizeReleasePreflightEvidence({
+      ...response,
+      statuses: [{ ...rawStatus, creator: null }],
+    });
+    expect(evidence.statuses[0]?.creator).toBeNull();
+  });
+
+  it("identifies the invalid response field without exposing its value", () => {
+    expect(() =>
+      normalizeReleasePreflightEvidence({
+        ...response,
+        statuses: [{ ...rawStatus, creator: { login: "" } }],
+      }),
+    ).toThrow(/statuses\[0\]\.creator/);
+  });
+
   it.each([
     null,
     [],
@@ -441,6 +459,19 @@ describe("release preflight response validation", () => {
   ])("rejects malformed GitHub evidence %#", (value) => {
     expect(() => normalizeReleasePreflightEvidence(value)).toThrow(/invalid.*evidence/i);
   });
+});
+
+describe("authenticated GitHub user validation", () => {
+  it("normalizes the authenticated login", () => {
+    expect(normalizeGitHubUser({ login: "release-owner", id: 42 })).toBe("release-owner");
+  });
+
+  it.each([null, [], {}, { login: "" }, { login: 42 }])(
+    "rejects malformed authenticated user data %#",
+    (value) => {
+      expect(() => normalizeGitHubUser(value)).toThrow(/invalid authenticated user response/i);
+    },
+  );
 });
 
 describe("check-runs response validation", () => {

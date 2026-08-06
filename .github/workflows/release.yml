@@ -55,6 +55,7 @@ jobs:
       - name: Verify release source and evidence
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_ACTOR: ${{ github.actor }}
           RELEASE_PREFLIGHT_CONTEXT: ${{ inputs['preflight-context'] }}
           RELEASE_SHA: ${{ inputs['expected-sha'] }}
         run: node scripts/release-check.ts --ci

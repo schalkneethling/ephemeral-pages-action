@@ -132,6 +132,7 @@ export function verifyReleasePreflight(
   expectedContext: string,
   expectedSha: string,
   expectedReviewer: string,
+  dispatcher: string,
   now = Date.now(),
 ): void {
   const contextPattern = new RegExp(`^${RELEASE_PREFLIGHT_CONTEXT_PREFIX}[a-f0-9]{64}$`);
@@ -141,13 +142,16 @@ export function verifyReleasePreflight(
   if (evidence.sha !== expectedSha) {
     throw new Error("The release preflight attestation does not match the release SHA.");
   }
+  if (dispatcher.toLowerCase() !== expectedReviewer.toLowerCase()) {
+    throw new Error("The release workflow must be dispatched by the release reviewer.");
+  }
   const status = evidence.statuses.find((candidate) => candidate.context === expectedContext);
   const createdAt = status ? Date.parse(status.createdAt) : Number.NaN;
   if (
     !status ||
     status.state !== "success" ||
     status.description !== RELEASE_PREFLIGHT_DESCRIPTION ||
-    status.creator?.toLowerCase() !== expectedReviewer.toLowerCase() ||
+    (status.creator !== null && status.creator.toLowerCase() !== expectedReviewer.toLowerCase()) ||
     !Number.isFinite(createdAt) ||
     createdAt > now + 60_000 ||
     now - createdAt > RELEASE_PREFLIGHT_MAX_AGE_MS
@@ -188,11 +192,12 @@ export function normalizeReleasePreflightEvidence(value: unknown): ReleasePrefli
       !["error", "failure", "pending", "success"].includes(status.state) ||
       (status.description !== null && typeof status.description !== "string") ||
       (typeof status.description === "string" && status.description.length > 140) ||
-      !creator ||
-      typeof creator !== "object" ||
-      Array.isArray(creator) ||
-      typeof (creator as Record<string, unknown>).login !== "string" ||
-      !(creator as Record<string, unknown>).login ||
+      (creator !== null &&
+        (!creator ||
+          typeof creator !== "object" ||
+          Array.isArray(creator) ||
+          typeof (creator as Record<string, unknown>).login !== "string" ||
+          !(creator as Record<string, unknown>).login)) ||
       typeof status.created_at !== "string" ||
       !Number.isFinite(Date.parse(status.created_at))
     ) {
@@ -202,7 +207,7 @@ export function normalizeReleasePreflightEvidence(value: unknown): ReleasePrefli
       context: status.context,
       state: status.state,
       description: status.description,
-      creator: String((creator as Record<string, unknown>).login),
+      creator: creator === null ? null : String((creator as Record<string, unknown>).login),
       createdAt: status.created_at,
     };
   });

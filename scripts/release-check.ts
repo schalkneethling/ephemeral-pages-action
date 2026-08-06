@@ -142,13 +142,21 @@ function main(): void {
   if (ci) {
     const preflightContext = process.env.RELEASE_PREFLIGHT_CONTEXT;
     if (!preflightContext) throw new Error("RELEASE_PREFLIGHT_CONTEXT must be provided.");
+    const releaseActor = process.env.RELEASE_ACTOR;
+    if (!releaseActor) throw new Error("RELEASE_ACTOR must be provided.");
     const preflight = normalizeReleasePreflightEvidence(
       api.request<unknown>(
         "GET",
         `repos/${controls.repository}/commits/${headSha}/status?per_page=100`,
       ),
     );
-    verifyReleasePreflight(preflight, preflightContext, headSha, controls.releaseReviewer);
+    verifyReleasePreflight(
+      preflight,
+      preflightContext,
+      headSha,
+      controls.releaseReviewer,
+      releaseActor,
+    );
   } else {
     const immutable = api.optional<{ enabled: boolean }>(
       `repos/${controls.repository}/immutable-releases`,

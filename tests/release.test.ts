@@ -294,13 +294,33 @@ describe("release preflight attestation", () => {
   it("accepts a recent SHA-bound attestation from the release reviewer", () => {
     expect(context.length).toBeLessThanOrEqual(100);
     expect(() =>
-      verifyReleasePreflight(evidence, context, sha, "RELEASE-OWNER", now),
+      verifyReleasePreflight(evidence, context, sha, "RELEASE-OWNER", "release-owner", now),
+    ).not.toThrow();
+  });
+
+  it("accepts a null status creator when the release reviewer dispatched the workflow", () => {
+    expect(() =>
+      verifyReleasePreflight(
+        { ...evidence, statuses: [{ ...status, creator: null }] },
+        context,
+        sha,
+        "release-owner",
+        "RELEASE-OWNER",
+        now,
+      ),
     ).not.toThrow();
   });
 
   it("rejects missing, stale, or untrusted attestations", () => {
     expect(() =>
-      verifyReleasePreflight({ ...evidence, statuses: [] }, context, sha, "release-owner", now),
+      verifyReleasePreflight(
+        { ...evidence, statuses: [] },
+        context,
+        sha,
+        "release-owner",
+        "release-owner",
+        now,
+      ),
     ).toThrow(/attestation/);
     expect(() =>
       verifyReleasePreflight(
@@ -308,12 +328,19 @@ describe("release preflight attestation", () => {
         context,
         sha,
         "release-owner",
+        "release-owner",
         now,
       ),
     ).toThrow(/attestation/);
-    expect(() => verifyReleasePreflight(evidence, context, sha, "different-owner", now)).toThrow(
-      /attestation/,
-    );
+    expect(() =>
+      verifyReleasePreflight(evidence, context, sha, "different-owner", "different-owner", now),
+    ).toThrow(/attestation/);
+  });
+
+  it("rejects a workflow dispatched by someone other than the release reviewer", () => {
+    expect(() =>
+      verifyReleasePreflight(evidence, context, sha, "release-owner", "other-user", now),
+    ).toThrow(/dispatched by the release reviewer/);
   });
 
   it("rejects evidence resolved from another commit", () => {
@@ -323,6 +350,7 @@ describe("release preflight attestation", () => {
         context,
         sha,
         "release-owner",
+        "release-owner",
         now,
       ),
     ).toThrow(/release SHA/);
@@ -330,7 +358,14 @@ describe("release preflight attestation", () => {
 
   it("rejects a caller-controlled context without a matching GitHub status", () => {
     expect(() =>
-      verifyReleasePreflight(evidence, "untrusted-input", sha, "release-owner", now),
+      verifyReleasePreflight(
+        evidence,
+        "untrusted-input",
+        sha,
+        "release-owner",
+        "release-owner",
+        now,
+      ),
     ).toThrow(/context/);
   });
 });
@@ -340,7 +375,7 @@ describe("release preflight response validation", () => {
     context: `${RELEASE_PREFLIGHT_CONTEXT_PREFIX}${"a".repeat(64)}`,
     state: "success",
     description: RELEASE_PREFLIGHT_DESCRIPTION,
-    creator: { login: "release-owner" },
+    creator: null,
     created_at: "2026-08-05T20:29:00.000Z",
   };
   const response = { sha: "0".repeat(40), total_count: 1, statuses: [rawStatus] };
@@ -353,11 +388,19 @@ describe("release preflight response validation", () => {
           context: rawStatus.context,
           state: "success",
           description: RELEASE_PREFLIGHT_DESCRIPTION,
-          creator: "release-owner",
+          creator: null,
           createdAt: "2026-08-05T20:29:00.000Z",
         },
       ],
     });
+  });
+
+  it("normalizes a status creator when GitHub supplies one", () => {
+    const evidence = normalizeReleasePreflightEvidence({
+      ...response,
+      statuses: [{ ...rawStatus, creator: { login: "release-owner" } }],
+    });
+    expect(evidence.statuses[0]?.creator).toBe("release-owner");
   });
 
   it.each([
@@ -373,7 +416,8 @@ describe("release preflight response validation", () => {
     { ...response, statuses: [{ ...rawStatus, state: 1 }] },
     { ...response, statuses: [{ ...rawStatus, state: "unknown" }] },
     { ...response, statuses: [{ ...rawStatus, description: "x".repeat(141) }] },
-    { ...response, statuses: [{ ...rawStatus, creator: null }] },
+    { ...response, statuses: [{ ...rawStatus, creator: {} }] },
+    { ...response, statuses: [{ ...rawStatus, creator: "release-owner" }] },
     { ...response, statuses: [{ ...rawStatus, created_at: "invalid" }] },
   ])("rejects malformed GitHub evidence %#", (value) => {
     expect(() => normalizeReleasePreflightEvidence(value)).toThrow(/invalid.*evidence/i);

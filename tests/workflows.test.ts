@@ -34,6 +34,7 @@ describe("trusted workflow acceptance criteria", () => {
     expect(release.match(/contents: write/g)).toHaveLength(1);
     expect(release).toContain("RELEASE_GUARD: ${{ vars.RELEASE_GUARD }}");
     expect(release).toContain("RELEASE_PREFLIGHT_CONTEXT: ${{ inputs['preflight-context'] }}");
+    expect(release).toContain("RELEASE_ACTOR: ${{ github.actor }}");
     expect(release).toContain("statuses: read");
     expect(release).toContain("cancel-in-progress: false");
     expect(release.match(/timeout-minutes: 20/g)).toHaveLength(2);

@@ -167,7 +167,10 @@ export function normalizeReleasePreflightEvidence(value: unknown): ReleasePrefli
     typeof response.sha !== "string" ||
     !/^[a-f0-9]{40}$/.test(response.sha) ||
     !Array.isArray(response.statuses) ||
-    response.statuses.length > 100
+    !Number.isSafeInteger(response.total_count) ||
+    (response.total_count as number) < 0 ||
+    (response.total_count as number) > 100 ||
+    response.total_count !== response.statuses.length
   ) {
     throw new Error("GitHub returned invalid release preflight evidence.");
   }

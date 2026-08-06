@@ -343,7 +343,7 @@ describe("release preflight response validation", () => {
     creator: { login: "release-owner" },
     created_at: "2026-08-05T20:29:00.000Z",
   };
-  const response = { sha: "0".repeat(40), statuses: [rawStatus] };
+  const response = { sha: "0".repeat(40), total_count: 1, statuses: [rawStatus] };
 
   it("normalizes the production combined-status response", () => {
     expect(normalizeReleasePreflightEvidence(response)).toEqual({
@@ -366,7 +366,10 @@ describe("release preflight response validation", () => {
     {},
     { ...response, sha: "not-a-sha" },
     { ...response, statuses: {} },
-    { ...response, statuses: Array.from({ length: 101 }, () => rawStatus) },
+    { ...response, total_count: 101 },
+    { ...response, total_count: 0 },
+    { ...response, total_count: -1 },
+    { ...response, total_count: 1.5 },
     { ...response, statuses: [{ ...rawStatus, state: 1 }] },
     { ...response, statuses: [{ ...rawStatus, state: "unknown" }] },
     { ...response, statuses: [{ ...rawStatus, description: "x".repeat(141) }] },

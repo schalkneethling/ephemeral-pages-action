@@ -7,6 +7,7 @@ import {
   assertReleaseSource,
   compareStableVersions,
   normalizeCheckRunsPage,
+  normalizeGitHubUser,
   normalizeReleasePreflightEvidence,
   planReleasePublication,
   publicationOperations,
@@ -398,6 +399,14 @@ describe("release preflight response validation", () => {
     statuses: Array<Record<string, unknown>>;
   }>(path.join(fixtureDirectory, "combined-status.json"), 64 * 1024);
   const rawStatus = response.statuses[0]!;
+  const paginatedResponse = {
+    ...response,
+    total_count: 101,
+    statuses: Array.from({ length: 100 }, (_, index) => ({
+      ...rawStatus,
+      context: index === 0 ? rawStatus.context : `quality/${index}`,
+    })),
+  };
 
   it("normalizes the production combined-status response", () => {
     expect(normalizeReleasePreflightEvidence(response)).toEqual({
@@ -422,16 +431,48 @@ describe("release preflight response validation", () => {
     expect(evidence.statuses[0]?.creator).toBe("release-owner");
   });
 
+  it("normalizes an explicit null status creator", () => {
+    const evidence = normalizeReleasePreflightEvidence({
+      ...response,
+      statuses: [{ ...rawStatus, creator: null }],
+    });
+    expect(evidence.statuses[0]?.creator).toBeNull();
+  });
+
+  it("accepts and verifies a bounded page when more statuses exist", () => {
+    const evidence = normalizeReleasePreflightEvidence(paginatedResponse);
+    expect(evidence.statuses).toHaveLength(100);
+    expect(() =>
+      verifyReleasePreflight(
+        evidence,
+        String(rawStatus.context),
+        response.sha,
+        "release-owner",
+        "release-owner",
+        Date.parse(String(rawStatus.created_at)) + 60_000,
+      ),
+    ).not.toThrow();
+  });
+
+  it("identifies the invalid response field without exposing its value", () => {
+    expect(() =>
+      normalizeReleasePreflightEvidence({
+        ...response,
+        statuses: [{ ...rawStatus, creator: { login: "" } }],
+      }),
+    ).toThrow(/statuses\[0\]\.creator/);
+  });
+
   it.each([
     null,
     [],
     {},
     { ...response, sha: "not-a-sha" },
     { ...response, statuses: {} },
-    { ...response, total_count: 101 },
     { ...response, total_count: 0 },
     { ...response, total_count: -1 },
     { ...response, total_count: 1.5 },
+    { ...response, statuses: Array.from({ length: 101 }, () => rawStatus), total_count: 101 },
     { ...response, statuses: [{ ...rawStatus, state: 1 }] },
     { ...response, statuses: [{ ...rawStatus, state: "unknown" }] },
     { ...response, statuses: [{ ...rawStatus, description: "x".repeat(141) }] },
@@ -441,6 +482,19 @@ describe("release preflight response validation", () => {
   ])("rejects malformed GitHub evidence %#", (value) => {
     expect(() => normalizeReleasePreflightEvidence(value)).toThrow(/invalid.*evidence/i);
   });
+});
+
+describe("authenticated GitHub user validation", () => {
+  it("normalizes the authenticated login", () => {
+    expect(normalizeGitHubUser({ login: "release-owner", id: 42 })).toBe("release-owner");
+  });
+
+  it.each([null, [], {}, { login: "" }, { login: 42 }])(
+    "rejects malformed authenticated user data %#",
+    (value) => {
+      expect(() => normalizeGitHubUser(value)).toThrow(/invalid authenticated user response/i);
+    },
+  );
 });
 
 describe("check-runs response validation", () => {

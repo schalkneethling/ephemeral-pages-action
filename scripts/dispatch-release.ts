@@ -8,7 +8,10 @@ import { readBoundedJson, run, runInteractive } from "./lib/io.ts";
 import {
   RELEASE_PREFLIGHT_CONTEXT_PREFIX,
   RELEASE_PREFLIGHT_DESCRIPTION,
+  normalizeGitHubUser,
+  normalizeReleasePreflightEvidence,
   parseStableVersion,
+  verifyReleasePreflight,
 } from "./lib/release.ts";
 
 interface PackageManifest {
@@ -17,6 +20,7 @@ interface PackageManifest {
 
 interface ControlsConfig {
   repository: string;
+  releaseReviewer: string;
 }
 
 interface WorkflowRun {
@@ -82,16 +86,25 @@ async function main(): Promise<void> {
 
   runInteractive("pnpm", ["release:check"], root);
   const sha = run("git", ["rev-parse", "HEAD"], { cwd: root });
+  const api = new GitHubApi();
+  const actor = normalizeGitHubUser(api.request<unknown>("GET", "user"));
+  if (actor.toLowerCase() !== controls.releaseReviewer.toLowerCase()) {
+    throw new Error("The release workflow must be dispatched by the release reviewer.");
+  }
   if (!dryRun && !yes && !(await confirmRelease(version.releaseTag, sha))) {
     throw new Error("Release dispatch cancelled.");
   }
 
   const preflightContext = `${RELEASE_PREFLIGHT_CONTEXT_PREFIX}${randomBytes(32).toString("hex")}`;
-  new GitHubApi().request("POST", `repos/${controls.repository}/statuses/${sha}`, {
+  api.request("POST", `repos/${controls.repository}/statuses/${sha}`, {
     state: "success",
     context: preflightContext,
     description: RELEASE_PREFLIGHT_DESCRIPTION,
   });
+  const preflight = normalizeReleasePreflightEvidence(
+    api.request<unknown>("GET", `repos/${controls.repository}/commits/${sha}/status?per_page=100`),
+  );
+  verifyReleasePreflight(preflight, preflightContext, sha, controls.releaseReviewer, actor);
 
   const startedAt = Date.now();
   run(

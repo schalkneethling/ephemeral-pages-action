@@ -71,6 +71,18 @@ describe("trusted workflow acceptance criteria", () => {
     expect(immutableAssertion).toBeGreaterThan(publication);
   });
 
+  it("verifies the raw preflight response before dispatching the release workflow", () => {
+    const dispatcher = script("dispatch-release.ts");
+    const createStatus = dispatcher.indexOf('api.request("POST"');
+    const readStatus = dispatcher.indexOf("normalizeReleasePreflightEvidence(", createStatus);
+    const verifyStatus = dispatcher.indexOf("verifyReleasePreflight(", readStatus);
+    const dispatchWorkflow = dispatcher.indexOf('"workflow",', verifyStatus);
+    expect(createStatus).toBeGreaterThan(-1);
+    expect(readStatus).toBeGreaterThan(createStatus);
+    expect(verifyStatus).toBeGreaterThan(readStatus);
+    expect(dispatchWorkflow).toBeGreaterThan(verifyStatus);
+  });
+
   it("never introduces pull_request_target", () => {
     for (const name of readdirSync(workflowDirectory).filter((file) => file.endsWith(".yml"))) {
       expect(workflow(name)).not.toContain("pull_request_target");

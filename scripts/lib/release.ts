@@ -165,56 +165,86 @@ export function verifyReleasePreflight(
   }
 }
 
+function invalidPreflightEvidence(field: string): never {
+  throw new Error(`GitHub returned invalid release preflight evidence at ${field}.`);
+}
+
 export function normalizeReleasePreflightEvidence(value: unknown): ReleasePreflightEvidence {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("GitHub returned invalid release preflight evidence.");
+    invalidPreflightEvidence("response");
   }
   const response = value as Record<string, unknown>;
-  if (
-    typeof response.sha !== "string" ||
-    !/^[a-f0-9]{40}$/.test(response.sha) ||
-    !Array.isArray(response.statuses) ||
-    !Number.isSafeInteger(response.total_count) ||
-    (response.total_count as number) < 0 ||
-    (response.total_count as number) > 100 ||
-    response.total_count !== response.statuses.length
-  ) {
-    throw new Error("GitHub returned invalid release preflight evidence.");
+  if (typeof response.sha !== "string" || !/^[a-f0-9]{40}$/.test(response.sha)) {
+    invalidPreflightEvidence("sha");
   }
-  const statuses = response.statuses.map((value): ReleasePreflightStatus => {
+  if (!Array.isArray(response.statuses)) {
+    invalidPreflightEvidence("statuses");
+  }
+  if (!Number.isSafeInteger(response.total_count) || (response.total_count as number) < 0) {
+    invalidPreflightEvidence("total_count");
+  }
+  if (response.statuses.length > 100) {
+    invalidPreflightEvidence("statuses");
+  }
+  if ((response.total_count as number) < response.statuses.length) {
+    invalidPreflightEvidence("statuses count");
+  }
+  const statuses = response.statuses.map((value, index): ReleasePreflightStatus => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("GitHub returned invalid release preflight evidence.");
+      invalidPreflightEvidence(`statuses[${index}]`);
     }
     const status = value as Record<string, unknown>;
-    const creator = status.creator;
+    if (typeof status.context !== "string" || !status.context || status.context.length > 100) {
+      invalidPreflightEvidence(`statuses[${index}].context`);
+    }
     if (
-      typeof status.context !== "string" ||
-      !status.context ||
-      status.context.length > 100 ||
       typeof status.state !== "string" ||
-      !["error", "failure", "pending", "success"].includes(status.state) ||
-      (status.description !== null && typeof status.description !== "string") ||
-      (typeof status.description === "string" && status.description.length > 140) ||
-      (creator !== null &&
-        (!creator ||
-          typeof creator !== "object" ||
-          Array.isArray(creator) ||
-          typeof (creator as Record<string, unknown>).login !== "string" ||
-          !(creator as Record<string, unknown>).login)) ||
-      typeof status.created_at !== "string" ||
-      !Number.isFinite(Date.parse(status.created_at))
+      !["error", "failure", "pending", "success"].includes(status.state)
     ) {
-      throw new Error("GitHub returned invalid release preflight evidence.");
+      invalidPreflightEvidence(`statuses[${index}].state`);
+    }
+    if (
+      status.description !== null &&
+      (typeof status.description !== "string" || status.description.length > 140)
+    ) {
+      invalidPreflightEvidence(`statuses[${index}].description`);
+    }
+    const creator = status.creator;
+    let creatorLogin: string | null = null;
+    if (creator !== undefined && creator !== null) {
+      if (
+        typeof creator !== "object" ||
+        Array.isArray(creator) ||
+        typeof (creator as Record<string, unknown>).login !== "string" ||
+        !(creator as Record<string, unknown>).login
+      ) {
+        invalidPreflightEvidence(`statuses[${index}].creator`);
+      }
+      creatorLogin = String((creator as Record<string, unknown>).login);
+    }
+    if (typeof status.created_at !== "string" || !Number.isFinite(Date.parse(status.created_at))) {
+      invalidPreflightEvidence(`statuses[${index}].created_at`);
     }
     return {
       context: status.context,
       state: status.state,
       description: status.description,
-      creator: creator === null ? null : String((creator as Record<string, unknown>).login),
+      creator: creatorLogin,
       createdAt: status.created_at,
     };
   });
   return { sha: response.sha, statuses };
+}
+
+export function normalizeGitHubUser(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("GitHub returned an invalid authenticated user response.");
+  }
+  const login = (value as Record<string, unknown>).login;
+  if (typeof login !== "string" || !login) {
+    throw new Error("GitHub returned an invalid authenticated user response.");
+  }
+  return login;
 }
 
 export function normalizeCheckRunsPage(value: unknown): CheckRunsPage {

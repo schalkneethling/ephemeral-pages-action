@@ -6,6 +6,7 @@ import {
   RELEASE_PREFLIGHT_DESCRIPTION,
   assertReleaseSource,
   compareStableVersions,
+  normalizeReleasePreflightEvidence,
   planReleasePublication,
   publicationOperations,
   parseStableVersion,
@@ -279,46 +280,103 @@ describe("release evidence", () => {
 
 describe("release preflight attestation", () => {
   const now = Date.parse("2026-08-05T20:30:00.000Z");
-  const sha = "0123456789abcdef";
+  const sha = "0".repeat(40);
   const context = `${RELEASE_PREFLIGHT_CONTEXT_PREFIX}${"a".repeat(64)}`;
   const status = {
     context,
     state: "success",
     description: RELEASE_PREFLIGHT_DESCRIPTION,
-    sha,
     creator: "release-owner",
     createdAt: "2026-08-05T20:29:00.000Z",
   };
+  const evidence = { sha, statuses: [status] };
 
   it("accepts a recent SHA-bound attestation from the release reviewer", () => {
     expect(context.length).toBeLessThanOrEqual(100);
     expect(() =>
-      verifyReleasePreflight([status], context, sha, "RELEASE-OWNER", now),
+      verifyReleasePreflight(evidence, context, sha, "RELEASE-OWNER", now),
     ).not.toThrow();
   });
 
   it("rejects missing, stale, or untrusted attestations", () => {
-    expect(() => verifyReleasePreflight([], context, sha, "release-owner", now)).toThrow(
-      /attestation/,
-    );
+    expect(() =>
+      verifyReleasePreflight({ ...evidence, statuses: [] }, context, sha, "release-owner", now),
+    ).toThrow(/attestation/);
     expect(() =>
       verifyReleasePreflight(
-        [{ ...status, createdAt: "2026-08-05T20:00:00.000Z" }],
+        { ...evidence, statuses: [{ ...status, createdAt: "2026-08-05T20:00:00.000Z" }] },
         context,
         sha,
         "release-owner",
         now,
       ),
     ).toThrow(/attestation/);
-    expect(() => verifyReleasePreflight([status], context, sha, "different-owner", now)).toThrow(
+    expect(() => verifyReleasePreflight(evidence, context, sha, "different-owner", now)).toThrow(
       /attestation/,
     );
   });
 
+  it("rejects evidence resolved from another commit", () => {
+    expect(() =>
+      verifyReleasePreflight(
+        { ...evidence, sha: "1".repeat(40) },
+        context,
+        sha,
+        "release-owner",
+        now,
+      ),
+    ).toThrow(/release SHA/);
+  });
+
   it("rejects a caller-controlled context without a matching GitHub status", () => {
     expect(() =>
-      verifyReleasePreflight([status], "untrusted-input", sha, "release-owner", now),
+      verifyReleasePreflight(evidence, "untrusted-input", sha, "release-owner", now),
     ).toThrow(/context/);
+  });
+});
+
+describe("release preflight response validation", () => {
+  const rawStatus = {
+    context: `${RELEASE_PREFLIGHT_CONTEXT_PREFIX}${"a".repeat(64)}`,
+    state: "success",
+    description: RELEASE_PREFLIGHT_DESCRIPTION,
+    creator: { login: "release-owner" },
+    created_at: "2026-08-05T20:29:00.000Z",
+  };
+  const response = { sha: "0".repeat(40), total_count: 1, statuses: [rawStatus] };
+
+  it("normalizes the production combined-status response", () => {
+    expect(normalizeReleasePreflightEvidence(response)).toEqual({
+      sha: response.sha,
+      statuses: [
+        {
+          context: rawStatus.context,
+          state: "success",
+          description: RELEASE_PREFLIGHT_DESCRIPTION,
+          creator: "release-owner",
+          createdAt: "2026-08-05T20:29:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it.each([
+    null,
+    [],
+    {},
+    { ...response, sha: "not-a-sha" },
+    { ...response, statuses: {} },
+    { ...response, total_count: 101 },
+    { ...response, total_count: 0 },
+    { ...response, total_count: -1 },
+    { ...response, total_count: 1.5 },
+    { ...response, statuses: [{ ...rawStatus, state: 1 }] },
+    { ...response, statuses: [{ ...rawStatus, state: "unknown" }] },
+    { ...response, statuses: [{ ...rawStatus, description: "x".repeat(141) }] },
+    { ...response, statuses: [{ ...rawStatus, creator: null }] },
+    { ...response, statuses: [{ ...rawStatus, created_at: "invalid" }] },
+  ])("rejects malformed GitHub evidence %#", (value) => {
+    expect(() => normalizeReleasePreflightEvidence(value)).toThrow(/invalid.*evidence/i);
   });
 });
 

@@ -63,9 +63,13 @@ export interface ReleasePreflightStatus {
   context: string;
   state: string;
   description: string | null;
-  sha: string;
   creator: string | null;
   createdAt: string;
+}
+
+export interface ReleasePreflightEvidence {
+  sha: string;
+  statuses: ReleasePreflightStatus[];
 }
 
 export interface MajorRollbackState {
@@ -124,7 +128,7 @@ export function assertReleaseSource(source: ReleaseSource): void {
 }
 
 export function verifyReleasePreflight(
-  statuses: ReleasePreflightStatus[],
+  evidence: ReleasePreflightEvidence,
   expectedContext: string,
   expectedSha: string,
   expectedReviewer: string,
@@ -134,13 +138,15 @@ export function verifyReleasePreflight(
   if (!contextPattern.test(expectedContext)) {
     throw new Error("The release preflight attestation context is invalid.");
   }
-  const status = statuses.find((candidate) => candidate.context === expectedContext);
+  if (evidence.sha !== expectedSha) {
+    throw new Error("The release preflight attestation does not match the release SHA.");
+  }
+  const status = evidence.statuses.find((candidate) => candidate.context === expectedContext);
   const createdAt = status ? Date.parse(status.createdAt) : Number.NaN;
   if (
     !status ||
     status.state !== "success" ||
     status.description !== RELEASE_PREFLIGHT_DESCRIPTION ||
-    status.sha !== expectedSha ||
     status.creator?.toLowerCase() !== expectedReviewer.toLowerCase() ||
     !Number.isFinite(createdAt) ||
     createdAt > now + 60_000 ||
@@ -150,6 +156,57 @@ export function verifyReleasePreflight(
       "A recent successful pnpm release:check attestation from the release reviewer is required.",
     );
   }
+}
+
+export function normalizeReleasePreflightEvidence(value: unknown): ReleasePreflightEvidence {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("GitHub returned invalid release preflight evidence.");
+  }
+  const response = value as Record<string, unknown>;
+  if (
+    typeof response.sha !== "string" ||
+    !/^[a-f0-9]{40}$/.test(response.sha) ||
+    !Array.isArray(response.statuses) ||
+    !Number.isSafeInteger(response.total_count) ||
+    (response.total_count as number) < 0 ||
+    (response.total_count as number) > 100 ||
+    response.total_count !== response.statuses.length
+  ) {
+    throw new Error("GitHub returned invalid release preflight evidence.");
+  }
+  const statuses = response.statuses.map((value): ReleasePreflightStatus => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("GitHub returned invalid release preflight evidence.");
+    }
+    const status = value as Record<string, unknown>;
+    const creator = status.creator;
+    if (
+      typeof status.context !== "string" ||
+      !status.context ||
+      status.context.length > 100 ||
+      typeof status.state !== "string" ||
+      !["error", "failure", "pending", "success"].includes(status.state) ||
+      (status.description !== null && typeof status.description !== "string") ||
+      (typeof status.description === "string" && status.description.length > 140) ||
+      !creator ||
+      typeof creator !== "object" ||
+      Array.isArray(creator) ||
+      typeof (creator as Record<string, unknown>).login !== "string" ||
+      !(creator as Record<string, unknown>).login ||
+      typeof status.created_at !== "string" ||
+      !Number.isFinite(Date.parse(status.created_at))
+    ) {
+      throw new Error("GitHub returned invalid release preflight evidence.");
+    }
+    return {
+      context: status.context,
+      state: status.state,
+      description: status.description,
+      creator: String((creator as Record<string, unknown>).login),
+      createdAt: status.created_at,
+    };
+  });
+  return { sha: response.sha, statuses };
 }
 
 export function planReleasePublication(state: PublicationState): PublicationPlan {

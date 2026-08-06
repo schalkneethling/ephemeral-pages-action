@@ -55,6 +55,7 @@ describe("trusted workflow acceptance criteria", () => {
     )?.[1];
     expect(nonCiBranch).toContain("/immutable-releases");
     expect(nonCiBranch).toContain("if (!immutable?.enabled)");
+    expect(releaseCheck).toContain("commits/${headSha}/status?per_page=100");
     expect(publisher).not.toContain("/immutable-releases");
     const publication = publisher.indexOf('api.request<ReleaseResponse>("PATCH"');
     const immutableAssertion = publisher.indexOf("release.draft || !release.immutable");

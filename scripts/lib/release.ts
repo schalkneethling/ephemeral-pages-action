@@ -90,6 +90,24 @@ export const RELEASE_PREFLIGHT_CONTEXT_PREFIX = "ephemeral-pages-action/prefligh
 export const RELEASE_PREFLIGHT_DESCRIPTION = "pnpm release:check passed";
 const RELEASE_PREFLIGHT_MAX_AGE_MS = 15 * 60 * 1000;
 
+export function formatReleaseWorkflowInstructions(
+  workflowUrl: string,
+  runId: number,
+  requiresApproval: boolean,
+): string {
+  const lines = [`Release workflow: ${workflowUrl}`];
+  if (requiresApproval) {
+    lines.push(
+      "",
+      'After verification succeeds, publication will wait for approval of the protected "release" environment.',
+      `Open ${workflowUrl} and select "Review deployments" to continue.`,
+      "You may stop this watcher with Ctrl-C without cancelling the GitHub workflow.",
+      `Reattach with: gh run watch ${runId} --exit-status`,
+    );
+  }
+  return lines.join("\n");
+}
+
 export function parseStableVersion(version: string): StableVersion {
   const match = STABLE_VERSION.exec(version);
   if (!match) {

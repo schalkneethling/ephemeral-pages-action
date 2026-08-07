@@ -8,6 +8,7 @@ import { readBoundedJson, run, runInteractive } from "./lib/io.ts";
 import {
   RELEASE_PREFLIGHT_CONTEXT_PREFIX,
   RELEASE_PREFLIGHT_DESCRIPTION,
+  formatReleaseWorkflowInstructions,
   normalizeGitHubUser,
   normalizeReleasePreflightEvidence,
   parseStableVersion,
@@ -125,7 +126,7 @@ async function main(): Promise<void> {
     { cwd: root },
   );
   const workflow = await findRun(sha, startedAt);
-  console.log(`Release workflow: ${workflow.url}`);
+  console.log(formatReleaseWorkflowInstructions(workflow.url, workflow.databaseId, !dryRun));
   runInteractive("gh", ["run", "watch", String(workflow.databaseId), "--exit-status"], root);
 }
 

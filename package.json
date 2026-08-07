@@ -1,6 +1,6 @@
 {
   "name": "ephemeral-pages-action",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Publish temporary HTML reports from same-repository pull requests to Ephemeral Pages.",
   "keywords": [
     "github-action",

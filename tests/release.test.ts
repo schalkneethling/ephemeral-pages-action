@@ -6,6 +6,7 @@ import {
   RELEASE_PREFLIGHT_DESCRIPTION,
   assertReleaseSource,
   compareStableVersions,
+  formatReleaseWorkflowInstructions,
   normalizeCheckRunsPage,
   normalizeGitHubUser,
   normalizeReleasePreflightEvidence,
@@ -21,6 +22,25 @@ import { readBoundedJson } from "../scripts/lib/io.js";
 const fixtureDirectory = path.resolve("tests/fixtures/github");
 
 describe("release acceptance criteria", () => {
+  it("explains release-environment approval and watcher recovery", () => {
+    expect(formatReleaseWorkflowInstructions("https://github.test/runs/42", 42, true)).toBe(
+      [
+        "Release workflow: https://github.test/runs/42",
+        "",
+        'After verification succeeds, publication will wait for approval of the protected "release" environment.',
+        'Open https://github.test/runs/42 and select "Review deployments" to continue.',
+        "You may stop this watcher with Ctrl-C without cancelling the GitHub workflow.",
+        "Reattach with: gh run watch 42 --exit-status",
+      ].join("\n"),
+    );
+  });
+
+  it("does not request environment approval for a dry-run workflow", () => {
+    expect(formatReleaseWorkflowInstructions("https://github.test/runs/42", 42, false)).toBe(
+      "Release workflow: https://github.test/runs/42",
+    );
+  });
+
   it("derives immutable and floating tags from the package version", () => {
     expect(parseStableVersion("1.2.3")).toEqual({
       version: "1.2.3",

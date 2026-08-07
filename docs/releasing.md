@@ -96,7 +96,8 @@ request with a successful production smoke test.
 `release` repeats the checks, displays the package version and exact commit, requests confirmation,
 dispatches `.github/workflows/release.yml`, and watches the run. GitHub reruns quality against that
 exact commit and verifies every release-specific evidence check before the protected publish job
-waits for approval.
+waits for approval. The dispatcher prints the workflow link, explains how to approve the `release`
+environment, and shows how to reattach if you stop the local watcher with Ctrl-C.
 
 The local check also verifies the repository's immutable-release setting with the maintainer's
 authenticated `gh` session. After it succeeds, the dispatcher records a unique commit status on the

@@ -64,9 +64,9 @@ export function parsePnpmImporterVersions(
 
     if (!inSection) continue;
 
-    const name = /^      (?:'([^']+)'|([^:]+)):$/.exec(line);
+    const name = /^      (?:'([^']+)'|"([^"]+)"|([^:]+)):$/.exec(line);
     if (name) {
-      currentName = name[1] ?? name[2];
+      currentName = name[1] ?? name[2] ?? name[3];
       continue;
     }
 

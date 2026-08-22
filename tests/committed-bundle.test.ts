@@ -20,7 +20,7 @@ function fixtureImporters(name: string): ImporterVersions {
   return readBoundedJson<ImporterVersions>(path.join(fixtureDirectory, name));
 }
 
-const lockfile = readBoundedFile(path.resolve("pnpm-lock.yaml"));
+const lockfileFixture = readBoundedFile(path.join(fixtureDirectory, "pnpm-lock-base.yaml"));
 const basePackage = fixturePackage("package-base.json");
 const nccOnlyPackage = fixturePackage("package-ncc-only.json");
 const baseImporters = fixtureImporters("importers-base.json");
@@ -122,15 +122,10 @@ describe("committed bundle acceptance criteria", () => {
 });
 
 describe("pnpm lockfile importer versions", () => {
-  it("reads production and development importer versions from the committed lockfile", () => {
-    const importers = parsePnpmRootImporters(lockfile);
-    expect(importers.dependencies).toEqual({
-      "@actions/core": "3.0.1",
-      "@actions/github": "9.1.1",
-    });
-    expect(importers.devDependencies["@vercel/ncc"]).toBe("0.44.1");
-    expect(importers.devDependencies.typescript).toBe("5.9.3");
-    expect(parsePnpmImporterVersions(lockfile, "devDependencies")).toEqual(
+  it("reads production and development importer versions from a lockfile fixture", () => {
+    const importers = parsePnpmRootImporters(lockfileFixture);
+    expect(importers).toEqual(fixtureImporters("importers-base.json"));
+    expect(parsePnpmImporterVersions(lockfileFixture, "devDependencies")).toEqual(
       importers.devDependencies,
     );
   });
